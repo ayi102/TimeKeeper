@@ -203,8 +203,13 @@ input:focus { outline: 2px solid var(--blue); border-color: var(--blue); }
   .sheet { width: 94vw; padding: 1rem .9rem; border-radius: 16px; }
   .sheet-name { font-size: 1.3rem; }
   .sheet-status { font-size: .8rem; margin: .25rem 0 .75rem; }
-  .bigbtn { padding: .8rem; font-size: 1.2rem; border-radius: 12px; }
-  .cancel { font-size: .85rem; padding: .4rem; margin-top: .4rem; }
+  .bigbtn { padding: .85rem; font-size: 1.2rem; border-radius: 12px; }
+  /* Big gap + bordered button so Cancel is a clearly separate tap target on
+     the resistive touchscreen (hard to mis-tap between it and Clock In). */
+  .cancel {
+    font-size: .9rem; padding: .55rem; margin-top: 2rem;
+    border: 1px solid var(--panel-2); border-radius: 12px;
+  }
   .checkmark { font-size: 2.4rem; width: 60px; height: 60px; line-height: 60px; }
   .done-msg { font-size: 1.05rem; }
 }
