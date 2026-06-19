@@ -186,11 +186,11 @@ input:focus { outline: 2px solid var(--blue); border-color: var(--blue); }
 
 /* ===================== TINY SCREENS (e.g. 3.5" 480x320) ===================== */
 @media (max-width: 600px) {
-  .topbar { padding: .7rem 1.5rem .7rem .8rem; gap: .5rem; align-items: center; }
-  .brand { font-size: 1.5rem; }
-  .clock { font-size: 1.8rem; }
-  .date { font-size: .9rem; }
-  .subline { font-size: .72rem; }
+  .topbar { padding: .5rem 1.3rem .5rem .7rem; gap: .4rem; align-items: center; }
+  .brand { font-size: 1.05rem; }
+  .clock { font-size: 1.25rem; }
+  .date { font-size: .64rem; }
+  .subline { font-size: .56rem; }
 
   /* Extra right padding clears the display's overscan so the last card/IP
      are never cut off. */
