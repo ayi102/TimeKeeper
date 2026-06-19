@@ -8,6 +8,13 @@ function tick() {
   const ampm = h >= 12 ? 'PM' : 'AM';
   h = h % 12 || 12;
   el.textContent = `${h}:${m} ${ampm}`;
+
+  const d = document.getElementById('liveDate');
+  if (d) {
+    d.textContent = now.toLocaleDateString(undefined, {
+      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+    });
+  }
 }
 setInterval(tick, 1000);
 tick();

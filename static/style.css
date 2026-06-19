@@ -35,9 +35,11 @@ body.kiosk { display: flex; flex-direction: column; overflow: hidden; user-selec
 }
 .brand { font-weight: 700; font-size: 1.25rem; letter-spacing: .3px; }
 .byline { font-weight: 400; color: var(--muted); font-size: .62em; }
-.clock { margin-left: auto; font-size: 1.5rem; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
-.ipinfo { color: var(--muted); font-size: .95rem; }
-.ipinfo strong { color: var(--text); }
+.topright { margin-left: auto; text-align: right; line-height: 1.2; }
+.clock { font-size: 1.5rem; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.date { color: var(--text); font-size: .95rem; white-space: nowrap; }
+.subline { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+.subline strong { color: var(--text); }
 
 .kiosk main { flex: 1; padding: 1.5rem; overflow-y: auto; }
 .prompt { text-align: center; font-size: 1.6rem; font-weight: 600; margin: .5rem 0 1.5rem; }
@@ -184,10 +186,11 @@ input:focus { outline: 2px solid var(--blue); border-color: var(--blue); }
 
 /* ===================== TINY SCREENS (e.g. 3.5" 480x320) ===================== */
 @media (max-width: 600px) {
-  .topbar { padding: .55rem 1.25rem .55rem .6rem; gap: .35rem; }
-  .brand { font-size: 1.05rem; }
-  .clock { font-size: 1.05rem; }
-  .ipinfo { font-size: .66rem; white-space: nowrap; }
+  .topbar { padding: .7rem 1.5rem .7rem .8rem; gap: .5rem; align-items: center; }
+  .brand { font-size: 1.5rem; }
+  .clock { font-size: 1.8rem; }
+  .date { font-size: .9rem; }
+  .subline { font-size: .72rem; }
 
   /* Extra right padding clears the display's overscan so the last card/IP
      are never cut off. */

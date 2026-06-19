@@ -9,8 +9,11 @@
 <body class="kiosk">
   <header class="topbar">
     <div class="brand">TimeKeeper <span class="byline">by ayi102</span></div>
-    <div class="clock" id="liveClock">--:--</div>
-    <div class="ipinfo">IP <strong>{{ ip }}</strong></div>
+    <div class="topright">
+      <div class="clock" id="liveClock">--:--</div>
+      <div class="date" id="liveDate"></div>
+      <div class="subline">IP <strong>{{ ip }}</strong></div>
+    </div>
   </header>
 
   <main>
