@@ -1,4 +1,4 @@
 @xset s off
 @xset -dpms
 @xset s noblank
-@/home/ayi102/TimeKeeper/deploy/kiosk.sh
+@bash /home/ayi102/TimeKeeper/deploy/kiosk.sh
