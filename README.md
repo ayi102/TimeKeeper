@@ -29,6 +29,7 @@ PORT=8080 TIMEKEEPER_PIN=1234 .venv/bin/python app.py
 | `TIMEKEEPER_PIN` | Admin PIN | 1234 |
 | `TIMEKEEPER_SECRET` | Flask session secret | change-me |
 | `TIMEKEEPER_EARLY_GRACE_MIN` | Minutes before shift start a worker may clock in | 15 |
+| `TIMEKEEPER_OVERTIME_MIN` | Minutes past shift end a worker may self clock-out | 60 |
 
 ## Deployment (Raspberry Pi)
 See [deploy/](deploy/): a systemd service runs the app on boot, Chromium

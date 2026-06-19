@@ -30,6 +30,11 @@ ADMIN_PIN = os.environ.get("TIMEKEEPER_PIN", "1234")
 # scheduled start time (so no one is paid before their shift).
 EARLY_GRACE_MIN = int(os.environ.get("TIMEKEEPER_EARLY_GRACE_MIN", "15"))
 
+# How many minutes past the scheduled end a worker may still clock OUT themselves
+# (capturing a little overtime). If they never clock out, the auto clock-out caps
+# them at the scheduled end. Larger amounts are adjusted on the Entries page.
+OVERTIME_GRACE_MIN = int(os.environ.get("TIMEKEEPER_OVERTIME_MIN", "60"))
+
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
@@ -221,14 +226,16 @@ def clock():
     now = datetime.now()
 
     if open_entry:
-        # ----- CLOCK OUT (cap at scheduled end so they can't run late) -----
+        # ----- CLOCK OUT (allow up to OVERTIME_GRACE past the scheduled end) -----
         cin = datetime.fromisoformat(open_entry["clock_in"])
         sched = schedule_for(conn, emp_id, cin.date())
         out_dt = now
         if sched:
-            end_dt = combine(cin.date(), sched["end_time"])
-            if now > end_dt:
-                out_dt = end_dt
+            limit = combine(cin.date(), sched["end_time"]) + timedelta(
+                minutes=OVERTIME_GRACE_MIN
+            )
+            if now > limit:
+                out_dt = limit
         if out_dt < cin:
             out_dt = cin
         conn.execute(
@@ -282,7 +289,9 @@ def auto_clockout_once():
         if not sched:
             continue
         end_dt = combine(cin.date(), sched["end_time"])
-        if now >= end_dt:
+        # Only close it once the overtime window has fully passed, and cap a
+        # forgotten clock-out at the scheduled end (no unearned overtime).
+        if now >= end_dt + timedelta(minutes=OVERTIME_GRACE_MIN):
             out = end_dt if end_dt > cin else cin
             conn.execute(
                 "UPDATE time_entries SET clock_out=? WHERE id=?",
@@ -452,7 +461,10 @@ def employee_schedule(emp_id):
         }
         for i in range(7)
     ]
-    return render_template("schedule.html", emp=emp, days=days, grace=EARLY_GRACE_MIN)
+    return render_template(
+        "schedule.html", emp=emp, days=days,
+        grace=EARLY_GRACE_MIN, overtime=OVERTIME_GRACE_MIN,
+    )
 
 
 @app.post("/admin/employee/<int:emp_id>/schedule")
