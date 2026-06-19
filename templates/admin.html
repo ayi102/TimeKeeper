@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin · TimeKeeper</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="admin">
+  <header class="adminbar">
+    <span class="brand">TimeKeeper · Admin</span>
+    <span class="spacer"></span>
+    <span class="muted">Kiosk: {{ ip }}</span>
+    <a class="btn ghost" href="{{ url_for('admin_summary') }}">Summary</a>
+    <a class="btn ghost" href="{{ url_for('admin_logout') }}">Log out</a>
+  </header>
+
+  <main class="container">
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% for cat, m in msgs %}<p class="flash {{ cat }}">{{ m }}</p>{% endfor %}
+    {% endwith %}
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Employees</h2>
+        <div class="grand">Earned: <strong>${{ '%.2f'|format(grand_total) }}</strong>
+          &nbsp;·&nbsp; Owed: <strong>${{ '%.2f'|format(total_owed) }}</strong></div>
+      </div>
+
+      <table class="data">
+        <thead>
+          <tr><th>Name</th><th>Status</th><th>Rate</th><th>Hours</th><th>Earned</th><th>Paid</th><th>Owed</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for e in employees %}
+          <tr class="{{ '' if e.active else 'inactive' }}">
+            <td>{{ e.name }}{% if not e.active %} <span class="tag">inactive</span>{% endif %}</td>
+            <td>{% if e.clocked_in %}<span class="dot in"></span>In{% else %}<span class="dot out"></span>Out{% endif %}</td>
+            <td>${{ '%.2f'|format(e.hourly_rate) }}/hr</td>
+            <td>{{ e.hours }}</td>
+            <td>${{ '%.2f'|format(e.pay) }}</td>
+            <td>${{ '%.2f'|format(e.paid) }}</td>
+            <td class="{{ 'owed-pos' if e.owed > 0 else '' }}">${{ '%.2f'|format(e.owed) }}</td>
+            <td class="actions">
+              <a class="btn small primary" href="{{ url_for('employee_payments', emp_id=e.id) }}">Pay Out</a>
+              <a class="btn small" href="{{ url_for('employee_schedule', emp_id=e.id) }}">Schedule</a>
+              <a class="btn small" href="{{ url_for('employee_entries', emp_id=e.id) }}">Entries</a>
+              <button class="btn small" type="button"
+                      onclick="editEmp({{ e.id }}, '{{ e.name|replace("'", "\\'") }}', {{ e.hourly_rate }})">Edit</button>
+              <form method="post" action="{{ url_for('toggle_employee', emp_id=e.id) }}" style="display:inline">
+                <button class="btn small ghost" type="submit">{{ 'Deactivate' if e.active else 'Reactivate' }}</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="muted">No employees yet. Add one below.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2 id="empFormTitle">Add Employee</h2>
+      <form method="post" action="{{ url_for('save_employee') }}" class="rowform">
+        <input type="hidden" name="id" id="empId">
+        <label>Name<input type="text" name="name" id="empName" required></label>
+        <label>Hourly rate ($)<input type="number" name="hourly_rate" id="empRate"
+               min="0" step="0.01" value="0"></label>
+        <div class="rowform-actions">
+          <button type="submit" class="btn primary">Save</button>
+          <button type="button" class="btn ghost" onclick="resetEmpForm()">Clear</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    function editEmp(id, name, rate) {
+      document.getElementById('empId').value = id;
+      document.getElementById('empName').value = name;
+      document.getElementById('empRate').value = rate;
+      document.getElementById('empFormTitle').textContent = 'Edit Employee';
+      document.getElementById('empName').scrollIntoView({behavior:'smooth', block:'center'});
+      document.getElementById('empName').focus();
+    }
+    function resetEmpForm() {
+      document.getElementById('empId').value = '';
+      document.getElementById('empName').value = '';
+      document.getElementById('empRate').value = '0';
+      document.getElementById('empFormTitle').textContent = 'Add Employee';
+    }
+  </script>
+</body>
+</html>

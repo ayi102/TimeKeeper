@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Summary · TimeKeeper</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="admin">
+  <header class="adminbar">
+    <a class="btn ghost" href="{{ url_for('admin') }}">← Back</a>
+    <span class="brand">TimeKeeper · Summary</span>
+    <span class="spacer"></span>
+    <button class="btn ghost" type="button" onclick="window.print()">Print</button>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <div class="card-head">
+        <h2>This Week</h2>
+        <div class="muted">{{ wk_start.strftime('%b %-d') }} – {{ wk_end.strftime('%b %-d, %Y') }}</div>
+      </div>
+      <table class="data">
+        <thead><tr><th>Name</th><th>Rate</th><th>Hours</th><th>Pay</th></tr></thead>
+        <tbody>
+          {% for e in week %}
+          <tr class="{{ '' if e.active else 'inactive' }}">
+            <td>{{ e.name }}</td>
+            <td>${{ '%.2f'|format(e.hourly_rate) }}/hr</td>
+            <td>{{ e.hours }}</td>
+            <td>${{ '%.2f'|format(e.pay) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr><th>Total</th><th></th><th>{{ week_hours }}</th><th>${{ '%.2f'|format(week_total) }}</th></tr>
+        </tfoot>
+      </table>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>All Time</h2>
+        <div class="grand">Accrued: <strong>${{ '%.2f'|format(all_total) }}</strong></div>
+      </div>
+      <table class="data">
+        <thead><tr><th>Name</th><th>Rate</th><th>Hours</th><th>Earned</th><th>Paid</th><th>Owed</th></tr></thead>
+        <tbody>
+          {% for e in alltime %}
+          <tr class="{{ '' if e.active else 'inactive' }}">
+            <td>{{ e.name }}{% if not e.active %} <span class="tag">inactive</span>{% endif %}</td>
+            <td>${{ '%.2f'|format(e.hourly_rate) }}/hr</td>
+            <td>{{ e.hours }}</td>
+            <td>${{ '%.2f'|format(e.pay) }}</td>
+            <td>${{ '%.2f'|format(e.paid) }}</td>
+            <td class="{{ 'owed-pos' if e.owed > 0 else '' }}">${{ '%.2f'|format(e.owed) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr><th>Total</th><th></th><th>{{ all_hours }}</th><th>${{ '%.2f'|format(all_total) }}</th><th>${{ '%.2f'|format(all_paid) }}</th><th>${{ '%.2f'|format(all_owed) }}</th></tr>
+        </tfoot>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

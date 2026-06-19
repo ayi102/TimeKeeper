@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+timekeeper.db
+cookies.txt
+deploy/mail.env
+deploy/timekeeper.env

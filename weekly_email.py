@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+"""Email a weekly hours/pay summary.
+
+Run by a systemd timer (see deploy/timekeeper-weekly.timer). By default it
+reports the previous full week (Mon-Sun). Pass `--this-week` to report the
+current week instead (handy for a test send).
+
+SMTP settings are read from environment variables (see deploy/mail.env):
+  MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASSWORD, MAIL_TO, MAIL_FROM
+"""
+import os
+import sys
+import smtplib
+import ssl
+from datetime import timedelta
+from email.message import EmailMessage
+
+import app as tk  # reuse period_summary / week_bounds (no server starts on import)
+
+
+def report_range(this_week):
+    this_mon, _ = tk.week_bounds()
+    if this_week:
+        return tk.week_bounds()
+    start = this_mon - timedelta(days=7)
+    return start, start + timedelta(days=6)
+
+
+def build(week_rows, alltime_by_id):
+    """Merge the week's hours/pay with each employee's running paid/owed totals."""
+    rows = []
+    for w in week_rows:
+        if not (w["active"] or w["hours"] > 0):
+            continue
+        a = alltime_by_id.get(w["id"], {})
+        rows.append({**w, "paid": a.get("paid", 0.0), "owed": a.get("owed", 0.0)})
+    totals = {
+        "hours": round(sum(r["hours"] for r in rows), 2),
+        "pay": round(sum(r["pay"] for r in rows), 2),
+        "paid": round(sum(r["paid"] for r in rows), 2),
+        "owed": round(sum(r["owed"] for r in rows), 2),
+    }
+    return rows, totals
+
+
+def render_text(start, end, rows, t):
+    lines = [
+        "TimeKeeper — Weekly Summary",
+        f"Week of {start:%b %d} – {end:%b %d, %Y}",
+        "(Hours and Earned are for this week; Paid and Owed are running totals.)",
+        "",
+        f"{'Employee':<16}{'Hours':>7}{'Earned':>10}{'Paid':>10}{'Owed':>10}",
+        "-" * 53,
+    ]
+    for r in rows:
+        lines.append(
+            f"{r['name']:<16}{r['hours']:>7.2f}{('$%.2f' % r['pay']):>10}"
+            f"{('$%.2f' % r['paid']):>10}{('$%.2f' % r['owed']):>10}"
+        )
+    lines += [
+        "-" * 53,
+        f"{'TOTAL':<16}{t['hours']:>7.2f}{('$%.2f' % t['pay']):>10}"
+        f"{('$%.2f' % t['paid']):>10}{('$%.2f' % t['owed']):>10}",
+    ]
+    return "\n".join(lines)
+
+
+def render_html(start, end, rows, t):
+    body = "".join(
+        f"<tr><td style='padding:6px 12px'>{r['name']}</td>"
+        f"<td style='padding:6px 12px;text-align:right'>{r['hours']:.2f}</td>"
+        f"<td style='padding:6px 12px;text-align:right'>${r['pay']:.2f}</td>"
+        f"<td style='padding:6px 12px;text-align:right'>${r['paid']:.2f}</td>"
+        f"<td style='padding:6px 12px;text-align:right;font-weight:bold'>${r['owed']:.2f}</td></tr>"
+        for r in rows
+    )
+    return f"""\
+<div style="font-family:Arial,sans-serif;color:#0f172a">
+  <h2 style="margin:0 0 4px">TimeKeeper — Weekly Summary</h2>
+  <p style="margin:0 0 4px;color:#475569">Week of {start:%b %d} – {end:%b %d, %Y}</p>
+  <p style="margin:0 0 16px;color:#94a3b8;font-size:13px">Hours and Earned are for this week; Paid and Owed are running totals.</p>
+  <table style="border-collapse:collapse;min-width:520px">
+    <thead><tr style="background:#1e293b;color:#fff">
+      <th style="padding:8px 12px;text-align:left">Employee</th>
+      <th style="padding:8px 12px;text-align:right">Hours</th>
+      <th style="padding:8px 12px;text-align:right">Earned</th>
+      <th style="padding:8px 12px;text-align:right">Paid</th>
+      <th style="padding:8px 12px;text-align:right">Owed</th>
+    </tr></thead>
+    <tbody>{body}</tbody>
+    <tfoot><tr style="font-weight:bold;border-top:2px solid #cbd5e1">
+      <td style="padding:8px 12px">TOTAL</td>
+      <td style="padding:8px 12px;text-align:right">{t['hours']:.2f}</td>
+      <td style="padding:8px 12px;text-align:right">${t['pay']:.2f}</td>
+      <td style="padding:8px 12px;text-align:right">${t['paid']:.2f}</td>
+      <td style="padding:8px 12px;text-align:right">${t['owed']:.2f}</td>
+    </tr></tfoot>
+  </table>
+</div>"""
+
+
+def main():
+    this_week = "--this-week" in sys.argv
+    start, end = report_range(this_week)
+    alltime_by_id = {e["id"]: e for e in tk.summarize_employees()}
+    rows, totals = build(tk.period_summary(start, end), alltime_by_id)
+
+    try:
+        host = os.environ["MAIL_HOST"]
+        user = os.environ["MAIL_USER"]
+        password = os.environ["MAIL_PASSWORD"]
+    except KeyError as e:
+        sys.exit(f"Missing mail setting: {e}. Fill in deploy/mail.env.")
+    port = int(os.environ.get("MAIL_PORT", "587"))
+    to = os.environ.get("MAIL_TO", user)
+    sender = os.environ.get("MAIL_FROM", user)
+
+    msg = EmailMessage()
+    msg["Subject"] = f"TimeKeeper hours: {start:%b %d}–{end:%b %d, %Y}"
+    msg["From"] = sender
+    msg["To"] = to
+    msg.set_content(render_text(start, end, rows, totals))
+    msg.add_alternative(render_html(start, end, rows, totals), subtype="html")
+
+    context = ssl.create_default_context()
+    with smtplib.SMTP(host, port, timeout=30) as s:
+        s.starttls(context=context)
+        s.login(user, password)
+        s.send_message(msg)
+    print(f"Sent summary for {start}–{end} to {to}")
+
+
+if __name__ == "__main__":
+    main()

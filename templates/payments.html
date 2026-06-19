@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ emp.name }} · Payments</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="admin">
+  <header class="adminbar">
+    <a class="btn ghost" href="{{ url_for('admin') }}">← Back</a>
+    <span class="brand">{{ emp.name }} · Payments</span>
+    <span class="spacer"></span>
+  </header>
+
+  <main class="container">
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% for cat, m in msgs %}<p class="flash {{ cat }}">{{ m }}</p>{% endfor %}
+    {% endwith %}
+
+    <section class="card">
+      <div class="stats">
+        <div class="stat"><span class="stat-label">Earned</span>
+          <span class="stat-val">${{ '%.2f'|format(emp.pay) }}</span></div>
+        <div class="stat"><span class="stat-label">Paid</span>
+          <span class="stat-val">${{ '%.2f'|format(emp.paid) }}</span></div>
+        <div class="stat owed"><span class="stat-label">Still owed</span>
+          <span class="stat-val">${{ '%.2f'|format(emp.owed) }}</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Record a Payout</h2>
+      <form method="post" action="{{ url_for('record_payout', emp_id=emp.id) }}" class="rowform">
+        <label>Amount ($)
+          <input type="number" name="amount" min="0.01" step="0.01"
+                 value="{{ '%.2f'|format(emp.owed if emp.owed > 0 else 0) }}" required></label>
+        <label>Note (optional)
+          <input type="text" name="note" placeholder="e.g. cash, check #123"></label>
+        <div class="rowform-actions">
+          <button type="submit" class="btn primary">Mark Paid</button>
+        </div>
+      </form>
+      <p class="muted">Amount defaults to the balance owed. You can change it for a partial payment.</p>
+    </section>
+
+    <section class="card">
+      <h2>Payment History</h2>
+      <table class="data">
+        <thead><tr><th>Date</th><th>Amount</th><th>Note</th><th></th></tr></thead>
+        <tbody>
+          {% for p in payments %}
+          <tr>
+            <td>{{ p.paid_at|fmt_dt }}</td>
+            <td>${{ '%.2f'|format(p.amount) }}</td>
+            <td>{{ p.note or '' }}</td>
+            <td class="actions">
+              <form method="post" action="{{ url_for('delete_payment', pid=p.id) }}"
+                    style="display:inline" onsubmit="return confirm('Delete this payment?')">
+                <button class="btn small danger" type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="muted">No payments recorded yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>
