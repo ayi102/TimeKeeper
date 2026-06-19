@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Settings · TimeKeeper</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="admin">
+  <header class="adminbar">
+    <a class="btn ghost" href="{{ url_for('kiosk') }}">← Back to clock</a>
+    <span class="brand">Settings</span>
+    <span class="spacer"></span>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h2>Wi-Fi</h2>
+      <p class="muted">Connected to: <strong>{{ current_ssid or 'not connected' }}</strong>
+        &nbsp;·&nbsp; IP: <strong>{{ ip }}</strong></p>
+
+      <div class="rowform">
+        <button type="button" class="btn" id="scanBtn" onclick="scan()">Scan for networks</button>
+      </div>
+      <ul class="netlist" id="netlist"></ul>
+
+      <form onsubmit="connect(event)" class="rowform" style="margin-top:1rem">
+        <label>Network name (SSID)
+          <input type="text" id="ssid" required></label>
+        <label>Password <span class="muted">(blank if open)</span>
+          <input type="password" id="password" autocomplete="off"></label>
+        <div class="rowform-actions">
+          <button type="submit" class="btn primary" id="connectBtn">Connect</button>
+        </div>
+      </form>
+      <p class="wifi-msg" id="wifiMsg"></p>
+    </section>
+
+    <section class="card">
+      <h2>Exit the app</h2>
+      <p class="muted">Closes the kiosk and drops you to the desktop. To bring the
+        clock back, double-tap “Start TimeKeeper Kiosk” on the desktop, or reboot.</p>
+      <button type="button" class="btn danger" onclick="exitKiosk()">Exit to Desktop</button>
+    </section>
+  </main>
+
+  <script>
+    async function scan() {
+      const btn = document.getElementById('scanBtn');
+      const list = document.getElementById('netlist');
+      btn.disabled = true; btn.textContent = 'Scanning…';
+      list.innerHTML = '';
+      try {
+        const r = await fetch('/api/wifi/scan', { method: 'POST' });
+        const d = await r.json();
+        if (!d.networks || !d.networks.length) {
+          list.innerHTML = '<li class="muted">No networks found. Try again.</li>';
+        } else {
+          for (const ssid of d.networks) {
+            const li = document.createElement('li');
+            li.textContent = ssid;
+            li.onclick = () => { document.getElementById('ssid').value = ssid;
+                                 document.getElementById('password').focus(); };
+            list.appendChild(li);
+          }
+        }
+      } catch (e) {
+        list.innerHTML = '<li class="muted">Scan failed.</li>';
+      }
+      btn.disabled = false; btn.textContent = 'Scan for networks';
+    }
+
+    async function connect(ev) {
+      ev.preventDefault();
+      const msg = document.getElementById('wifiMsg');
+      const btn = document.getElementById('connectBtn');
+      const ssid = document.getElementById('ssid').value.trim();
+      const password = document.getElementById('password').value;
+      btn.disabled = true; msg.className = 'wifi-msg'; msg.textContent = 'Connecting…';
+      try {
+        const r = await fetch('/api/wifi/connect', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ssid, password }),
+        });
+        const d = await r.json();
+        msg.textContent = d.message;
+        msg.className = 'wifi-msg ' + (d.ok ? 'ok' : 'err');
+      } catch (e) {
+        msg.textContent = 'Request failed.'; msg.className = 'wifi-msg err';
+      }
+      btn.disabled = false;
+    }
+
+    function exitKiosk() {
+      if (!confirm('Exit the app and go to the desktop?')) return;
+      fetch('/api/exit-kiosk', { method: 'POST' }).catch(() => {});
+    }
+  </script>
+</body>
+</html>

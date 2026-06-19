@@ -7,6 +7,7 @@ Two surfaces:
 """
 import os
 import socket
+import subprocess
 import threading
 import time as _time
 from datetime import datetime, timedelta
@@ -36,6 +37,9 @@ EARLY_GRACE_MIN = int(os.environ.get("TIMEKEEPER_EARLY_GRACE_MIN", "15"))
 OVERTIME_GRACE_MIN = int(os.environ.get("TIMEKEEPER_OVERTIME_MIN", "60"))
 
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+WIFI_CTL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "deploy", "wifi_ctl.sh")
+KIOSK_EXIT_FLAG = "/tmp/kiosk-exit"
 
 
 # --------------------------------------------------------------------------- #
@@ -313,6 +317,78 @@ def auto_clockout_loop():
 # --------------------------------------------------------------------------- #
 # Admin
 # --------------------------------------------------------------------------- #
+def _wifi(*args, timeout=40):
+    try:
+        return subprocess.run(
+            ["sudo", "bash", WIFI_CTL, *args],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+
+
+@app.get("/settings")
+@admin_required
+def settings():
+    st = _wifi("status", timeout=10)
+    ssid = ""
+    ip = ""
+    if st and st.returncode == 0:
+        for line in st.stdout.splitlines():
+            if line.startswith("ssid="):
+                ssid = line[5:].strip()
+            elif line.startswith("ip="):
+                ip = line[3:].strip()
+    return render_template("settings.html", current_ssid=ssid, ip=ip or get_lan_ip())
+
+
+@app.post("/api/wifi/scan")
+@admin_required
+def wifi_scan():
+    r = _wifi("scan")
+    if not r or r.returncode != 0:
+        return jsonify(ok=False, networks=[])
+    nets = [s for s in r.stdout.splitlines() if s.strip()]
+    return jsonify(ok=True, networks=nets)
+
+
+@app.post("/api/wifi/connect")
+@admin_required
+def wifi_connect():
+    data = request.json or {}
+    ssid = (data.get("ssid") or "").strip()
+    password = data.get("password") or ""
+    if not ssid:
+        return jsonify(ok=False, message="Pick or enter a network name.")
+    if password and not (8 <= len(password) <= 63):
+        return jsonify(ok=False, message="WiFi password must be 8–63 characters.")
+    r = _wifi("connect", ssid, password)
+    if not r:
+        return jsonify(ok=False, message="WiFi command timed out.")
+    out = (r.stdout or "").strip()
+    if r.returncode == 0 and out.startswith("OK"):
+        return jsonify(
+            ok=True,
+            message=f"Connecting to “{ssid}”… if it succeeds, this device's IP "
+            "may change (it's shown in the banner).",
+        )
+    reason = {"ERR:password": "wrong password format", "ERR:ssid": "invalid name"}.get(
+        out, out or "unknown error"
+    )
+    return jsonify(ok=False, message=f"Could not connect: {reason}")
+
+
+@app.post("/api/exit-kiosk")
+@admin_required
+def exit_kiosk():
+    try:
+        open(KIOSK_EXIT_FLAG, "w").close()
+        subprocess.run(["pkill", "chromium"], timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return jsonify(ok=True)
+
+
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":

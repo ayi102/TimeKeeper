@@ -35,6 +35,22 @@ body.kiosk { display: flex; flex-direction: column; overflow: hidden; user-selec
 }
 .brand { font-weight: 700; font-size: 1.25rem; letter-spacing: .3px; }
 .byline { font-weight: 400; color: var(--muted); font-size: .62em; }
+.gear {
+  text-decoration: none; color: var(--muted); line-height: 1;
+  padding: .15rem .45rem; border-radius: 10px; border: 1px solid var(--panel-2);
+}
+.gear:active { background: var(--panel-2); }
+
+/* Settings page: scanned-network list + connect result message */
+.netlist { list-style: none; margin: .75rem 0 0; padding: 0; }
+.netlist li {
+  padding: .7rem .9rem; border: 1px solid var(--panel-2); border-radius: 10px;
+  margin-bottom: .4rem; cursor: pointer; font-size: 1rem;
+}
+.netlist li:active { background: var(--panel-2); }
+.wifi-msg { margin-top: .75rem; }
+.wifi-msg.ok { color: #86efac; }
+.wifi-msg.err { color: #fca5a5; }
 .topright { margin-left: auto; text-align: right; line-height: 1.2; }
 .clock { font-size: 1.5rem; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
 .date { color: var(--text); font-size: .95rem; white-space: nowrap; }
@@ -188,6 +204,7 @@ input:focus { outline: 2px solid var(--blue); border-color: var(--blue); }
 @media (max-width: 600px) {
   .topbar { padding: .5rem 1.3rem .5rem .7rem; gap: .4rem; align-items: center; }
   .brand { font-size: 1.05rem; }
+  .gear { font-size: 1.2rem; padding: .1rem .4rem; }
   .clock { font-size: 1.25rem; }
   .date { font-size: .64rem; }
   .subline { font-size: .56rem; }
