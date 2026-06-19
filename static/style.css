@@ -34,6 +34,7 @@ body.kiosk { display: flex; flex-direction: column; overflow: hidden; user-selec
   border-bottom: 1px solid var(--panel-2);
 }
 .brand { font-weight: 700; font-size: 1.25rem; letter-spacing: .3px; }
+.byline { font-weight: 400; color: var(--muted); font-size: .62em; }
 .clock { margin-left: auto; font-size: 1.5rem; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
 .ipinfo { color: var(--muted); font-size: .95rem; }
 .ipinfo strong { color: var(--text); }
@@ -183,10 +184,10 @@ input:focus { outline: 2px solid var(--blue); border-color: var(--blue); }
 
 /* ===================== TINY SCREENS (e.g. 3.5" 480x320) ===================== */
 @media (max-width: 600px) {
-  .topbar { padding: .3rem 1.25rem .3rem .5rem; gap: .3rem; }
-  .brand { font-size: .8rem; }
-  .clock { font-size: .85rem; }
-  .ipinfo { font-size: .6rem; white-space: nowrap; }
+  .topbar { padding: .55rem 1.25rem .55rem .6rem; gap: .35rem; }
+  .brand { font-size: 1.05rem; }
+  .clock { font-size: 1.05rem; }
+  .ipinfo { font-size: .66rem; white-space: nowrap; }
 
   /* Extra right padding clears the display's overscan so the last card/IP
      are never cut off. */
