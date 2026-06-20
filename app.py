@@ -328,7 +328,6 @@ def _wifi(*args, timeout=40):
 
 
 @app.get("/settings")
-@admin_required
 def settings():
     st = _wifi("status", timeout=10)
     ssid = ""
@@ -343,7 +342,6 @@ def settings():
 
 
 @app.post("/api/wifi/scan")
-@admin_required
 def wifi_scan():
     r = _wifi("scan")
     if not r or r.returncode != 0:
@@ -353,7 +351,6 @@ def wifi_scan():
 
 
 @app.post("/api/wifi/connect")
-@admin_required
 def wifi_connect():
     data = request.json or {}
     ssid = (data.get("ssid") or "").strip()
@@ -379,7 +376,6 @@ def wifi_connect():
 
 
 @app.post("/api/exit-kiosk")
-@admin_required
 def exit_kiosk():
     try:
         open(KIOSK_EXIT_FLAG, "w").close()
