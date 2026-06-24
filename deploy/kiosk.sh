@@ -33,6 +33,10 @@ while true; do
 
     chromium-browser \
         --kiosk \
+        --incognito \
+        --disk-cache-dir=/dev/shm/tk-cache \
+        --disk-cache-size=20000000 \
+        --disable-gpu-shader-disk-cache \
         --noerrdialogs \
         --disable-infobars \
         --disable-session-crashed-bubble \
