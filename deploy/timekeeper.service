@@ -1,7 +1,8 @@
 [Unit]
 Description=TimeKeeper time clock web app
-After=network-online.target
-Wants=network-online.target
+# Only orders after the basic network stack — does NOT wait for an actual
+# connection, so the kiosk still runs (on localhost) when there's no WiFi.
+After=network.target
 
 [Service]
 Type=simple
