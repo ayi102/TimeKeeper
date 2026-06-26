@@ -205,6 +205,9 @@ input:focus { outline: 2px solid var(--blue); border-color: var(--blue); }
 .weeknav-label strong { display: block; }
 .weeknav-label a { font-size: .85rem; }
 
+/* "ends next day" hint under an overnight shift's end time */
+.overnight { font-size: .7rem; color: var(--blue); margin-top: .25rem; }
+
 /* Flash messages */
 .flash { padding: .75rem 1rem; border-radius: 10px; margin-bottom: 1rem; }
 .flash.error { background: rgba(239,68,68,.15); color: #fca5a5; }

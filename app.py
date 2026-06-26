@@ -139,6 +139,16 @@ def combine(on_date, hhmm):
     return datetime(on_date.year, on_date.month, on_date.day, h, m)
 
 
+def shift_end(on_date, start_hhmm, end_hhmm):
+    """End datetime of a shift that *starts* on `on_date`. When the end time is
+    not after the start time the shift runs overnight, so it ends the next day
+    (e.g. 19:00 -> 07:00 ends at 07:00 tomorrow)."""
+    end = combine(on_date, end_hhmm)
+    if end_hhmm <= start_hhmm:
+        end += timedelta(days=1)
+    return end
+
+
 def fmt_time_label(hhmm):
     return combine(datetime.now().date(), hhmm).strftime("%-I:%M %p")
 
@@ -238,7 +248,7 @@ def clock():
         sched = schedule_for(conn, emp_id, cin.date())
         out_dt = now
         if sched:
-            limit = combine(cin.date(), sched["end_time"]) + timedelta(
+            limit = shift_end(cin.date(), sched["start_time"], sched["end_time"]) + timedelta(
                 minutes=OVERTIME_GRACE_MIN
             )
             if now > limit:
@@ -262,7 +272,7 @@ def clock():
                        message=f"{emp['name']} is not scheduled to work today.")
 
     start_dt = combine(now.date(), sched["start_time"])
-    end_dt = combine(now.date(), sched["end_time"])
+    end_dt = shift_end(now.date(), sched["start_time"], sched["end_time"])
 
     if now < start_dt - timedelta(minutes=EARLY_GRACE_MIN):
         conn.close()
@@ -295,7 +305,7 @@ def auto_clockout_once():
         sched = schedule_for(conn, e["employee_id"], cin.date())
         if not sched:
             continue
-        end_dt = combine(cin.date(), sched["end_time"])
+        end_dt = shift_end(cin.date(), sched["start_time"], sched["end_time"])
         # Only close it once the overtime window has fully passed, and cap a
         # forgotten clock-out at the scheduled end (no unearned overtime).
         if now >= end_dt + timedelta(minutes=OVERTIME_GRACE_MIN):
@@ -549,19 +559,30 @@ def employee_schedule(emp_id):
 def save_schedule(emp_id):
     conn = db.get_db()
     conn.execute("DELETE FROM schedules WHERE employee_id=?", (emp_id,))
+    skipped = 0
     for i in range(7):
-        if request.form.get(f"work_{i}"):
-            start = request.form.get(f"start_{i}")
-            end = request.form.get(f"end_{i}")
-            if start and end and end > start:
-                conn.execute(
-                    "INSERT INTO schedules (employee_id, weekday, start_time, end_time) "
-                    "VALUES (?,?,?,?)",
-                    (emp_id, i, start, end),
-                )
+        if not request.form.get(f"work_{i}"):
+            continue
+        start = request.form.get(f"start_{i}")
+        end = request.form.get(f"end_{i}")
+        # end <= start means an overnight shift (ends next day); only equal or
+        # missing times are invalid. Previously overnight shifts were silently
+        # dropped here.
+        if start and end and start != end:
+            conn.execute(
+                "INSERT INTO schedules (employee_id, weekday, start_time, end_time) "
+                "VALUES (?,?,?,?)",
+                (emp_id, i, start, end),
+            )
+        else:
+            skipped += 1
     conn.commit()
     conn.close()
-    flash("Schedule saved.", "ok")
+    if skipped:
+        flash(f"Schedule saved, but {skipped} day(s) were skipped — start and end "
+              "times can't be the same.", "error")
+    else:
+        flash("Schedule saved.", "ok")
     return redirect(url_for("employee_schedule", emp_id=emp_id))
 
 
@@ -763,12 +784,13 @@ def save_week(emp_id):
             continue
         start = request.form.get(f"start_{i}")
         end = request.form.get(f"end_{i}")
-        # Never touch days with multiple entries, or rows with bad times.
-        if len(rows) > 1 or not (start and end) or end <= start:
+        # Never touch days with multiple entries, or rows with equal/missing
+        # times. end < start is fine — it's an overnight shift (ends next day).
+        if len(rows) > 1 or not (start and end) or start == end:
             skipped += 1
             continue
         cin = combine(d, start).isoformat(timespec="seconds")
-        cout = combine(d, end).isoformat(timespec="seconds")
+        cout = shift_end(d, start, end).isoformat(timespec="seconds")
         if len(rows) == 1:
             conn.execute("UPDATE time_entries SET clock_in=?, clock_out=? WHERE id=?",
                          (cin, cout, rows[0]["id"]))

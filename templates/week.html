@@ -34,7 +34,8 @@
         Check each day {{ emp.name }} worked and set the times. Days are pre-filled from
         any logged entry, otherwise from their schedule. Saving creates or updates each
         checked day's entry; <strong>unchecking</strong> a day that already has a logged
-        entry deletes it (you'll be asked to confirm).
+        entry deletes it (you'll be asked to confirm). An end time earlier than the start
+        is treated as an overnight shift ending the next morning.
       </p>
 
       <form method="post" id="weekform">
