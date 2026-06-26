@@ -617,6 +617,15 @@ def record_payout(emp_id):
         flash("Enter a pay or tip amount greater than zero.", "error")
         return redirect(url_for("employee_payments", emp_id=emp_id))
 
+    # Paying more than is owed (e.g. rounding $320.33 up to $321) shouldn't push
+    # the balance negative — the overpayment is booked as a tip instead.
+    summary = next((e for e in summarize_employees() if e["id"] == emp_id), None)
+    owed = max(0.0, summary["owed"]) if summary else 0.0
+    over = round(amount - owed, 2)
+    if over > 0:
+        amount = round(owed, 2)
+        tip = round(tip + over, 2)
+
     conn = db.get_db()
     conn.execute(
         "INSERT INTO payments (employee_id, amount, tip, paid_at, note) VALUES (?,?,?,?,?)",
@@ -625,6 +634,8 @@ def record_payout(emp_id):
     conn.commit()
     conn.close()
     paid_msg = f"${amount:.2f}" + (f" + ${tip:.2f} tip" if tip else "")
+    if over > 0:
+        paid_msg += f" (${over:.2f} over the balance recorded as tip)"
     flash(f"Recorded payout of {paid_msg}.", "ok")
     return redirect(url_for("employee_payments", emp_id=emp_id))
 
