@@ -195,6 +195,10 @@ input:focus { outline: 2px solid var(--blue); border-color: var(--blue); }
 .card.login input { width: 100%; margin-bottom: 1rem; text-align: center; font-size: 1.25rem; }
 .card.login .btn { width: 100%; }
 
+/* Wraps a wide table so it scrolls on its own instead of widening the page
+   (used on the Summary page, which stays a full table on phones). */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
 /* Week-fill navigation (prev / range / next) */
 .weeknav { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: 1rem; }
 .weeknav-label { text-align: center; line-height: 1.3; }

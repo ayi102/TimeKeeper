@@ -24,12 +24,13 @@
       <div class="card-head">
         <h2>Employees</h2>
         <div class="grand">Earned: <strong>${{ '%.2f'|format(grand_total) }}</strong>
-          &nbsp;·&nbsp; Owed: <strong>${{ '%.2f'|format(total_owed) }}</strong></div>
+          &nbsp;·&nbsp; Owed: <strong>${{ '%.2f'|format(total_owed) }}</strong>
+          &nbsp;·&nbsp; Tips: <strong>${{ '%.2f'|format(total_tips) }}</strong></div>
       </div>
 
       <table class="data employees">
         <thead>
-          <tr><th>Name</th><th>Status</th><th>Rate</th><th>Hours</th><th>Earned</th><th>Paid</th><th>Owed</th><th></th></tr>
+          <tr><th>Name</th><th>Status</th><th>Rate</th><th>Hours</th><th>Earned</th><th>Paid</th><th>Owed</th><th>Tips</th><th></th></tr>
         </thead>
         <tbody>
           {% for e in employees %}
@@ -41,6 +42,7 @@
             <td data-label="Earned">${{ '%.2f'|format(e.pay) }}</td>
             <td data-label="Paid">${{ '%.2f'|format(e.paid) }}</td>
             <td data-label="Owed" class="{{ 'owed-pos' if e.owed > 0 else '' }}">${{ '%.2f'|format(e.owed) }}</td>
+            <td data-label="Tips">${{ '%.2f'|format(e.tips) }}</td>
             <td class="actions">
               <a class="btn small primary" href="{{ url_for('employee_payments', emp_id=e.id) }}">Pay Out</a>
               <a class="btn small" href="{{ url_for('employee_schedule', emp_id=e.id) }}">Schedule</a>
@@ -53,7 +55,7 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="8" class="muted">No employees yet. Add one below.</td></tr>
+          <tr><td colspan="9" class="muted">No employees yet. Add one below.</td></tr>
           {% endfor %}
         </tbody>
       </table>

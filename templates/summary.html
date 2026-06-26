@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Summary · TimeKeeper</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=2) }}">
 </head>
 <body class="admin">
   <header class="adminbar">
@@ -43,8 +43,9 @@
         <h2>All Time</h2>
         <div class="grand">Accrued: <strong>${{ '%.2f'|format(all_total) }}</strong></div>
       </div>
+      <div class="table-wrap">
       <table class="data">
-        <thead><tr><th>Name</th><th>Rate</th><th>Hours</th><th>Earned</th><th>Paid</th><th>Owed</th></tr></thead>
+        <thead><tr><th>Name</th><th>Rate</th><th>Hours</th><th>Earned</th><th>Paid</th><th>Owed</th><th>Tips</th></tr></thead>
         <tbody>
           {% for e in alltime %}
           <tr class="{{ '' if e.active else 'inactive' }}">
@@ -54,13 +55,15 @@
             <td>${{ '%.2f'|format(e.pay) }}</td>
             <td>${{ '%.2f'|format(e.paid) }}</td>
             <td class="{{ 'owed-pos' if e.owed > 0 else '' }}">${{ '%.2f'|format(e.owed) }}</td>
+            <td>${{ '%.2f'|format(e.tips) }}</td>
           </tr>
           {% endfor %}
         </tbody>
         <tfoot>
-          <tr><th>Total</th><th></th><th>{{ all_hours }}</th><th>${{ '%.2f'|format(all_total) }}</th><th>${{ '%.2f'|format(all_paid) }}</th><th>${{ '%.2f'|format(all_owed) }}</th></tr>
+          <tr><th>Total</th><th></th><th>{{ all_hours }}</th><th>${{ '%.2f'|format(all_total) }}</th><th>${{ '%.2f'|format(all_paid) }}</th><th>${{ '%.2f'|format(all_owed) }}</th><th>${{ '%.2f'|format(all_tips) }}</th></tr>
         </tfoot>
       </table>
+      </div>
     </section>
   </main>
 </body>

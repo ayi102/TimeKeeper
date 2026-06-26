@@ -33,12 +33,14 @@ def build(week_rows, alltime_by_id):
         if not (w["active"] or w["hours"] > 0):
             continue
         a = alltime_by_id.get(w["id"], {})
-        rows.append({**w, "paid": a.get("paid", 0.0), "owed": a.get("owed", 0.0)})
+        rows.append({**w, "paid": a.get("paid", 0.0), "owed": a.get("owed", 0.0),
+                     "tips": a.get("tips", 0.0)})
     totals = {
         "hours": round(sum(r["hours"] for r in rows), 2),
         "pay": round(sum(r["pay"] for r in rows), 2),
         "paid": round(sum(r["paid"] for r in rows), 2),
         "owed": round(sum(r["owed"] for r in rows), 2),
+        "tips": round(sum(r["tips"] for r in rows), 2),
     }
     return rows, totals
 
@@ -47,20 +49,20 @@ def render_text(start, end, rows, t):
     lines = [
         "TimeKeeper — Weekly Summary",
         f"Week of {start:%b %d} – {end:%b %d, %Y}",
-        "(Hours and Earned are for this week; Paid and Owed are running totals.)",
+        "(Hours and Earned are for this week; Paid, Owed and Tips are running totals.)",
         "",
-        f"{'Employee':<16}{'Hours':>7}{'Earned':>10}{'Paid':>10}{'Owed':>10}",
-        "-" * 53,
+        f"{'Employee':<16}{'Hours':>7}{'Earned':>10}{'Paid':>10}{'Owed':>10}{'Tips':>10}",
+        "-" * 63,
     ]
     for r in rows:
         lines.append(
             f"{r['name']:<16}{r['hours']:>7.2f}{('$%.2f' % r['pay']):>10}"
-            f"{('$%.2f' % r['paid']):>10}{('$%.2f' % r['owed']):>10}"
+            f"{('$%.2f' % r['paid']):>10}{('$%.2f' % r['owed']):>10}{('$%.2f' % r['tips']):>10}"
         )
     lines += [
-        "-" * 53,
+        "-" * 63,
         f"{'TOTAL':<16}{t['hours']:>7.2f}{('$%.2f' % t['pay']):>10}"
-        f"{('$%.2f' % t['paid']):>10}{('$%.2f' % t['owed']):>10}",
+        f"{('$%.2f' % t['paid']):>10}{('$%.2f' % t['owed']):>10}{('$%.2f' % t['tips']):>10}",
     ]
     return "\n".join(lines)
 
@@ -71,7 +73,8 @@ def render_html(start, end, rows, t):
         f"<td style='padding:6px 12px;text-align:right'>{r['hours']:.2f}</td>"
         f"<td style='padding:6px 12px;text-align:right'>${r['pay']:.2f}</td>"
         f"<td style='padding:6px 12px;text-align:right'>${r['paid']:.2f}</td>"
-        f"<td style='padding:6px 12px;text-align:right;font-weight:bold'>${r['owed']:.2f}</td></tr>"
+        f"<td style='padding:6px 12px;text-align:right;font-weight:bold'>${r['owed']:.2f}</td>"
+        f"<td style='padding:6px 12px;text-align:right'>${r['tips']:.2f}</td></tr>"
         for r in rows
     )
     return f"""\
@@ -79,13 +82,14 @@ def render_html(start, end, rows, t):
   <h2 style="margin:0 0 4px">TimeKeeper — Weekly Summary</h2>
   <p style="margin:0 0 4px;color:#475569">Week of {start:%b %d} – {end:%b %d, %Y}</p>
   <p style="margin:0 0 16px;color:#94a3b8;font-size:13px">Hours and Earned are for this week; Paid and Owed are running totals.</p>
-  <table style="border-collapse:collapse;min-width:520px">
+  <table style="border-collapse:collapse;min-width:600px">
     <thead><tr style="background:#1e293b;color:#fff">
       <th style="padding:8px 12px;text-align:left">Employee</th>
       <th style="padding:8px 12px;text-align:right">Hours</th>
       <th style="padding:8px 12px;text-align:right">Earned</th>
       <th style="padding:8px 12px;text-align:right">Paid</th>
       <th style="padding:8px 12px;text-align:right">Owed</th>
+      <th style="padding:8px 12px;text-align:right">Tips</th>
     </tr></thead>
     <tbody>{body}</tbody>
     <tfoot><tr style="font-weight:bold;border-top:2px solid #cbd5e1">
@@ -94,6 +98,7 @@ def render_html(start, end, rows, t):
       <td style="padding:8px 12px;text-align:right">${t['pay']:.2f}</td>
       <td style="padding:8px 12px;text-align:right">${t['paid']:.2f}</td>
       <td style="padding:8px 12px;text-align:right">${t['owed']:.2f}</td>
+      <td style="padding:8px 12px;text-align:right">${t['tips']:.2f}</td>
     </tr></tfoot>
   </table>
 </div>"""

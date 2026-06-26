@@ -87,7 +87,7 @@ def summarize_employees():
         "SELECT * FROM employees ORDER BY active DESC, name COLLATE NOCASE"
     ).fetchall()
     entries = conn.execute("SELECT * FROM time_entries").fetchall()
-    payments = conn.execute("SELECT employee_id, amount FROM payments").fetchall()
+    payments = conn.execute("SELECT employee_id, amount, tip FROM payments").fetchall()
     conn.close()
 
     now = datetime.now()
@@ -95,8 +95,10 @@ def summarize_employees():
     for e in entries:
         by_emp.setdefault(e["employee_id"], []).append(e)
     paid_by = {}
+    tips_by = {}
     for p in payments:
         paid_by[p["employee_id"]] = paid_by.get(p["employee_id"], 0.0) + p["amount"]
+        tips_by[p["employee_id"]] = tips_by.get(p["employee_id"], 0.0) + p["tip"]
 
     result = []
     for emp in employees:
@@ -117,6 +119,7 @@ def summarize_employees():
                 "pay": pay,
                 "paid": paid,
                 "owed": round(pay - paid, 2),
+                "tips": round(tips_by.get(emp["id"], 0.0), 2),
             }
         )
     return result
@@ -407,9 +410,10 @@ def admin():
     employees = summarize_employees()
     grand_total = round(sum(e["pay"] for e in employees), 2)
     total_owed = round(sum(e["owed"] for e in employees), 2)
+    total_tips = round(sum(e["tips"] for e in employees), 2)
     return render_template(
         "admin.html", employees=employees, grand_total=grand_total,
-        total_owed=total_owed, ip=get_lan_ip()
+        total_owed=total_owed, total_tips=total_tips, ip=get_lan_ip()
     )
 
 
@@ -431,6 +435,7 @@ def admin_summary():
         all_total=round(sum(e["pay"] for e in alltime), 2),
         all_paid=round(sum(e["paid"] for e in alltime), 2),
         all_owed=round(sum(e["owed"] for e in alltime), 2),
+        all_tips=round(sum(e["tips"] for e in alltime), 2),
     )
 
 
@@ -577,24 +582,29 @@ def employee_payments(emp_id):
 @app.post("/admin/employee/<int:emp_id>/payout")
 @admin_required
 def record_payout(emp_id):
-    amount = request.form.get("amount") or "0"
     note = (request.form.get("note") or "").strip()
-    try:
-        amount = round(float(amount), 2)
-    except ValueError:
-        amount = 0.0
-    if amount <= 0:
-        flash("Enter a payout amount greater than zero.", "error")
+
+    def money(field):
+        try:
+            return max(0.0, round(float(request.form.get(field) or "0"), 2))
+        except ValueError:
+            return 0.0
+
+    amount = money("amount")  # wages — reduces what's owed
+    tip = money("tip")        # extra, tracked separately
+    if amount + tip <= 0:
+        flash("Enter a pay or tip amount greater than zero.", "error")
         return redirect(url_for("employee_payments", emp_id=emp_id))
 
     conn = db.get_db()
     conn.execute(
-        "INSERT INTO payments (employee_id, amount, paid_at, note) VALUES (?,?,?,?)",
-        (emp_id, amount, db.now_iso(), note),
+        "INSERT INTO payments (employee_id, amount, tip, paid_at, note) VALUES (?,?,?,?,?)",
+        (emp_id, amount, tip, db.now_iso(), note),
     )
     conn.commit()
     conn.close()
-    flash(f"Recorded payout of ${amount:.2f}.", "ok")
+    paid_msg = f"${amount:.2f}" + (f" + ${tip:.2f} tip" if tip else "")
+    flash(f"Recorded payout of {paid_msg}.", "ok")
     return redirect(url_for("employee_payments", emp_id=emp_id))
 
 
