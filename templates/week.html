@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ emp.name }} · Fill a Week</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=2) }}">
+</head>
+<body class="admin">
+  <header class="adminbar">
+    <a class="btn ghost" href="{{ url_for('employee_entries', emp_id=emp.id) }}">← Entries</a>
+    <span class="brand">{{ emp.name }} · Fill a Week</span>
+    <span class="spacer"></span>
+  </header>
+
+  <main class="container">
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% for cat, m in msgs %}<p class="flash {{ cat }}">{{ m }}</p>{% endfor %}
+    {% endwith %}
+
+    <section class="card">
+      <div class="weeknav">
+        <a class="btn ghost" href="{{ url_for('employee_week', emp_id=emp.id, start=prev_week) }}">← Prev</a>
+        <div class="weeknav-label">
+          <strong>{{ wk_start.strftime('%b %-d') }} – {{ wk_end.strftime('%b %-d, %Y') }}</strong>
+          {% if wk_start.isoformat() != this_week %}
+            <a href="{{ url_for('employee_week', emp_id=emp.id, start=this_week) }}">This week</a>
+          {% endif %}
+        </div>
+        <a class="btn ghost" href="{{ url_for('employee_week', emp_id=emp.id, start=next_week) }}">Next →</a>
+      </div>
+
+      <p class="muted">
+        Check each day {{ emp.name }} worked and set the times. Days are pre-filled from
+        any logged entry, otherwise from their schedule. Saving creates or updates each
+        checked day's entry; <strong>unchecking</strong> a day that already has a logged
+        entry deletes it (you'll be asked to confirm).
+      </p>
+
+      <form method="post" id="weekform">
+        <input type="hidden" name="week_start" value="{{ wk_start.isoformat() }}">
+        <table class="data sched">
+          <thead><tr><th>Worked</th><th>Day</th><th>Start</th><th>End</th></tr></thead>
+          <tbody>
+            {% for d in days %}
+            <tr class="{{ 'inactive' if d.locked }}">
+              <td>
+                {% if d.locked %}
+                  <span class="tag">{{ d.count }} entries</span>
+                {% else %}
+                  <input type="checkbox" name="work_{{ d.idx }}" id="work_{{ d.idx }}"
+                         {{ 'checked' if d.working }} onchange="toggleDay({{ d.idx }})"
+                         data-existing="{{ 1 if d.count == 1 else 0 }}" data-label="{{ d.label }}">
+                {% endif %}
+              </td>
+              <td><label for="work_{{ d.idx }}">{{ d.label }}</label></td>
+              <td><input type="time" name="start_{{ d.idx }}" id="start_{{ d.idx }}"
+                         value="{{ d.start }}" {{ 'disabled' if not d.working or d.locked }}></td>
+              <td><input type="time" name="end_{{ d.idx }}" id="end_{{ d.idx }}"
+                         value="{{ d.end }}" {{ 'disabled' if not d.working or d.locked }}></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div style="margin-top:1rem">
+          <button type="submit" class="btn primary">Save Week</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    function toggleDay(i) {
+      const on = document.getElementById('work_' + i).checked;
+      document.getElementById('start_' + i).disabled = !on;
+      document.getElementById('end_' + i).disabled = !on;
+    }
+    // Warn before deleting: an unchecked day that already had a logged entry.
+    document.getElementById('weekform').addEventListener('submit', function (e) {
+      const victims = [];
+      this.querySelectorAll('input[data-existing="1"]').forEach(function (cb) {
+        if (!cb.checked) victims.push(cb.getAttribute('data-label'));
+      });
+      if (victims.length &&
+          !confirm('This will delete the logged entry on: ' + victims.join(', ') +
+                   '.\nContinue?')) {
+        e.preventDefault();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ emp.name }} · Entries</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=2) }}">
 </head>
 <body class="admin">
   <header class="adminbar">
@@ -17,6 +17,14 @@
     {% with msgs = get_flashed_messages(with_categories=true) %}
       {% for cat, m in msgs %}<p class="flash {{ cat }}">{{ m }}</p>{% endfor %}
     {% endwith %}
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Fill a Week</h2>
+        <a class="btn primary" href="{{ url_for('employee_week', emp_id=emp.id) }}">Open week view →</a>
+      </div>
+      <p class="muted">Enter or adjust a whole week at once, pre-filled from {{ emp.name }}'s schedule.</p>
+    </section>
 
     <section class="card">
       <h2>Add / Edit Entry</h2>

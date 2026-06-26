@@ -195,6 +195,12 @@ input:focus { outline: 2px solid var(--blue); border-color: var(--blue); }
 .card.login input { width: 100%; margin-bottom: 1rem; text-align: center; font-size: 1.25rem; }
 .card.login .btn { width: 100%; }
 
+/* Week-fill navigation (prev / range / next) */
+.weeknav { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: 1rem; }
+.weeknav-label { text-align: center; line-height: 1.3; }
+.weeknav-label strong { display: block; }
+.weeknav-label a { font-size: .85rem; }
+
 /* Flash messages */
 .flash { padding: .75rem 1rem; border-radius: 10px; margin-bottom: 1rem; }
 .flash.error { background: rgba(239,68,68,.15); color: #fca5a5; }
@@ -233,4 +239,55 @@ input:focus { outline: 2px solid var(--blue); border-color: var(--blue); }
   }
   .checkmark { font-size: 2.4rem; width: 60px; height: 60px; line-height: 60px; }
   .done-msg { font-size: 1.05rem; }
+
+  /* ---- Admin on a phone ---- */
+  /* Reclaim horizontal space: thinner page/card padding. */
+  .container { padding: .75rem; }
+  .card { padding: 1rem; }
+
+  /* The header bar has too many items for a phone row — let it wrap instead of
+     running off the right edge. */
+  .adminbar { flex-wrap: wrap; gap: .5rem .75rem; padding: .7rem .9rem; }
+  .adminbar .brand { font-size: 1.05rem; }
+  .adminbar .spacer { flex-basis: 100%; height: 0; }
+
+  /* Inputs default to min-width:200px (good on desktop, but two time pickers
+     side by side overflow a phone). Let them shrink to their cell instead. */
+  input[type=text], input[type=number], input[type=password],
+  input[type=datetime-local], input[type=time] { min-width: 0; }
+  .rowform { gap: .75rem; }
+  .rowform label { width: 100%; }
+  .rowform label input { width: 100%; }
+
+  /* Schedule grid: let the Start/End time pickers fill their column so all
+     four columns fit without scrolling sideways. */
+  table.sched { table-layout: fixed; width: 100%; }
+  table.sched th, table.sched td { padding: .55rem .35rem; }
+  table.sched input[type=time] { width: 100%; }
+
+  /* Employees table: 8 columns never fit a phone. Reflow each row into a
+     stacked card with "Label: value" lines, so nothing overflows sideways. */
+  table.employees, table.employees tbody, table.employees tr, table.employees td { display: block; }
+  table.employees thead { display: none; }
+  table.employees tr {
+    border: 1px solid var(--panel-2); border-radius: 12px;
+    padding: .5rem .9rem; margin-bottom: .75rem;
+  }
+  table.employees td {
+    border: none; padding: .35rem 0;
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    text-align: right;
+  }
+  /* Label each value with its column name (carried on the cell's data-label). */
+  table.employees td::before {
+    content: attr(data-label);
+    color: var(--muted); font-weight: 600; font-size: .72rem;
+    text-transform: uppercase; letter-spacing: .5px; text-align: left;
+  }
+  /* The name is the card title: bigger, full width, no label. */
+  table.employees td.name-cell { justify-content: flex-start; font-size: 1.15rem; font-weight: 700; }
+  table.employees td.name-cell::before { display: none; }
+  /* Actions become a left-aligned button cluster, no label. */
+  table.employees td.actions { justify-content: flex-start; flex-wrap: wrap; gap: .4rem; }
+  table.employees td.actions::before { display: none; }
 }

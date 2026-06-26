@@ -660,6 +660,130 @@ def delete_entry(entry_id):
     return redirect(url_for("employee_entries", emp_id=emp_id))
 
 
+def _entries_by_day(conn, emp_id):
+    """Map each calendar date -> list of entry ids for this employee."""
+    by_day = {}
+    for r in conn.execute(
+        "SELECT id, clock_in, clock_out FROM time_entries WHERE employee_id=?", (emp_id,)
+    ).fetchall():
+        d = datetime.fromisoformat(r["clock_in"]).date()
+        by_day.setdefault(d, []).append(r)
+    return by_day
+
+
+@app.get("/admin/employee/<int:emp_id>/week")
+@admin_required
+def employee_week(emp_id):
+    """Fill or edit a whole week of time entries at once.
+
+    Each day is pre-filled in priority order: an existing single entry, else
+    the employee's weekly schedule, else blank. Days with more than one entry
+    are locked here (edited individually on the Entries page) so a bulk save
+    can never clobber a split shift.
+    """
+    conn = db.get_db()
+    emp = conn.execute("SELECT * FROM employees WHERE id=?", (emp_id,)).fetchone()
+    if not emp:
+        conn.close()
+        abort(404)
+
+    start_arg = request.args.get("start")
+    try:
+        ref = datetime.fromisoformat(start_arg).date() if start_arg else datetime.now().date()
+    except ValueError:
+        ref = datetime.now().date()
+    monday, sunday = week_bounds(ref)
+
+    by_day = _entries_by_day(conn, emp_id)
+    days = []
+    for i in range(7):
+        d = monday + timedelta(days=i)
+        rows = by_day.get(d, [])
+        sched = schedule_for(conn, emp_id, d)
+        info = {"idx": i, "date": d.isoformat(), "label": d.strftime("%a %b %-d"),
+                "count": len(rows), "locked": False}
+        if len(rows) == 1:
+            cin = datetime.fromisoformat(rows[0]["clock_in"])
+            cout = datetime.fromisoformat(rows[0]["clock_out"]) if rows[0]["clock_out"] else None
+            info.update(working=True, start=cin.strftime("%H:%M"),
+                        end=cout.strftime("%H:%M") if cout else "")
+        elif len(rows) > 1:
+            info.update(working=True, locked=True, start="", end="")
+        elif sched:
+            info.update(working=True, start=sched["start_time"], end=sched["end_time"])
+        else:
+            info.update(working=False, start="09:00", end="17:00")
+        days.append(info)
+    conn.close()
+
+    return render_template(
+        "week.html", emp=emp, days=days, wk_start=monday, wk_end=sunday,
+        prev_week=(monday - timedelta(days=7)).isoformat(),
+        next_week=(monday + timedelta(days=7)).isoformat(),
+        this_week=week_bounds()[0].isoformat(),
+    )
+
+
+@app.post("/admin/employee/<int:emp_id>/week")
+@admin_required
+def save_week(emp_id):
+    conn = db.get_db()
+    emp = conn.execute("SELECT id FROM employees WHERE id=?", (emp_id,)).fetchone()
+    if not emp:
+        conn.close()
+        abort(404)
+
+    week_start = request.form.get("week_start") or ""
+    try:
+        monday = datetime.fromisoformat(week_start).date()
+    except ValueError:
+        monday = week_bounds()[0]
+
+    by_day = _entries_by_day(conn, emp_id)
+    created = updated = deleted = skipped = 0
+    for i in range(7):
+        d = monday + timedelta(days=i)
+        rows = by_day.get(d, [])
+        if not request.form.get(f"work_{i}"):
+            # Unchecking a day removes its single entry (multi-entry days are
+            # locked in the form and never reach here unchecked).
+            if len(rows) == 1:
+                conn.execute("DELETE FROM time_entries WHERE id=?", (rows[0]["id"],))
+                deleted += 1
+            continue
+        start = request.form.get(f"start_{i}")
+        end = request.form.get(f"end_{i}")
+        # Never touch days with multiple entries, or rows with bad times.
+        if len(rows) > 1 or not (start and end) or end <= start:
+            skipped += 1
+            continue
+        cin = combine(d, start).isoformat(timespec="seconds")
+        cout = combine(d, end).isoformat(timespec="seconds")
+        if len(rows) == 1:
+            conn.execute("UPDATE time_entries SET clock_in=?, clock_out=? WHERE id=?",
+                         (cin, cout, rows[0]["id"]))
+            updated += 1
+        else:
+            conn.execute(
+                "INSERT INTO time_entries (employee_id, clock_in, clock_out) VALUES (?,?,?)",
+                (emp_id, cin, cout))
+            created += 1
+    conn.commit()
+    conn.close()
+
+    parts = []
+    if created:
+        parts.append(f"{created} added")
+    if updated:
+        parts.append(f"{updated} updated")
+    if deleted:
+        parts.append(f"{deleted} removed")
+    if skipped:
+        parts.append(f"{skipped} skipped (bad times or multiple entries)")
+    flash("Week saved — " + (", ".join(parts) if parts else "no changes") + ".", "ok")
+    return redirect(url_for("employee_week", emp_id=emp_id, start=week_start))
+
+
 if __name__ == "__main__":
     db.init_db()
     threading.Thread(target=auto_clockout_loop, daemon=True).start()

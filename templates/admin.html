@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Admin · TimeKeeper</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=2) }}">
 </head>
 <body class="admin">
   <header class="adminbar">
@@ -27,20 +27,20 @@
           &nbsp;·&nbsp; Owed: <strong>${{ '%.2f'|format(total_owed) }}</strong></div>
       </div>
 
-      <table class="data">
+      <table class="data employees">
         <thead>
           <tr><th>Name</th><th>Status</th><th>Rate</th><th>Hours</th><th>Earned</th><th>Paid</th><th>Owed</th><th></th></tr>
         </thead>
         <tbody>
           {% for e in employees %}
           <tr class="{{ '' if e.active else 'inactive' }}">
-            <td>{{ e.name }}{% if not e.active %} <span class="tag">inactive</span>{% endif %}</td>
-            <td>{% if e.clocked_in %}<span class="dot in"></span>In{% else %}<span class="dot out"></span>Out{% endif %}</td>
-            <td>${{ '%.2f'|format(e.hourly_rate) }}/hr</td>
-            <td>{{ e.hours }}</td>
-            <td>${{ '%.2f'|format(e.pay) }}</td>
-            <td>${{ '%.2f'|format(e.paid) }}</td>
-            <td class="{{ 'owed-pos' if e.owed > 0 else '' }}">${{ '%.2f'|format(e.owed) }}</td>
+            <td class="name-cell">{{ e.name }}{% if not e.active %} <span class="tag">inactive</span>{% endif %}</td>
+            <td data-label="Status">{% if e.clocked_in %}<span class="dot in"></span>In{% else %}<span class="dot out"></span>Out{% endif %}</td>
+            <td data-label="Rate">${{ '%.2f'|format(e.hourly_rate) }}/hr</td>
+            <td data-label="Hours">{{ e.hours }}</td>
+            <td data-label="Earned">${{ '%.2f'|format(e.pay) }}</td>
+            <td data-label="Paid">${{ '%.2f'|format(e.paid) }}</td>
+            <td data-label="Owed" class="{{ 'owed-pos' if e.owed > 0 else '' }}">${{ '%.2f'|format(e.owed) }}</td>
             <td class="actions">
               <a class="btn small primary" href="{{ url_for('employee_payments', emp_id=e.id) }}">Pay Out</a>
               <a class="btn small" href="{{ url_for('employee_schedule', emp_id=e.id) }}">Schedule</a>
