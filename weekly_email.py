@@ -10,12 +10,39 @@ SMTP settings are read from environment variables (see deploy/mail.env):
 """
 import os
 import sys
+import gzip
 import smtplib
+import sqlite3
 import ssl
+import tempfile
 from datetime import timedelta
 from email.message import EmailMessage
 
 import app as tk  # reuse period_summary / week_bounds (no server starts on import)
+import db
+
+
+def db_snapshot_gz():
+    """A gzipped, consistent snapshot of the whole database via SQLite's online
+    backup (safe even mid-write). Written to RAM (/dev/shm when available) to
+    avoid SD-card wear, then removed. Attached to the weekly email so every send
+    doubles as an off-site backup that can restore the entire history."""
+    ramdir = "/dev/shm" if os.path.isdir("/dev/shm") else tempfile.gettempdir()
+    tmp = os.path.join(ramdir, "tk-backup.db")
+    src = sqlite3.connect(db.DB_PATH)
+    dst = sqlite3.connect(tmp)
+    try:
+        with dst:
+            src.backup(dst)
+    finally:
+        src.close()
+        dst.close()
+    try:
+        with open(tmp, "rb") as f:
+            return gzip.compress(f.read())
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
 
 def report_range(this_week):
@@ -126,6 +153,14 @@ def main():
     msg["To"] = to
     msg.set_content(render_text(start, end, rows, totals))
     msg.add_alternative(render_html(start, end, rows, totals), subtype="html")
+
+    # Attach a full DB snapshot so the weekly email doubles as an off-site
+    # backup. Best-effort: a backup failure must never block the summary.
+    try:
+        msg.add_attachment(db_snapshot_gz(), maintype="application", subtype="gzip",
+                           filename=f"timekeeper-{end:%Y-%m-%d}.db.gz")
+    except Exception as exc:
+        print(f"warning: could not attach DB backup: {exc}")
 
     context = ssl.create_default_context()
     with smtplib.SMTP(host, port, timeout=30) as s:
