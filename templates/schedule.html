@@ -20,32 +20,34 @@
 
     <section class="card">
       <p class="muted">
-        Check each day {{ emp.name }} works and set the shift times. On working days they
-        can clock in starting {{ grace }} minutes before the start time (recorded at the
-        start — no pay before the shift). Clocking out is capped at the end time, so tapping
-        out late doesn't add hours; if they forget, they're auto-clocked-out at the end.
-        Leaving early records the earlier time. Unchecked days are days off — they can't clock in.
-        <strong>Overnight shifts:</strong> set an end time earlier than the start
-        (e.g. 7:00 PM to 7:00 AM) and it runs into the next morning.
+        Add each shift {{ emp.name }} works. A day can have <strong>more than one shift</strong>
+        (e.g. 12:00 AM–7:00 AM and 7:00 PM–7:00 AM). They can clock in starting {{ grace }}
+        minutes before a start (recorded at the start — no pay before the shift); clocking out
+        is capped at the end. A day with no shifts is a day off. For an
+        <strong>overnight shift</strong>, set the end earlier than the start (7:00 PM → 7:00 AM).
       </p>
-      <form method="post">
-        <table class="data sched">
-          <thead><tr><th>Working</th><th>Day</th><th>Start</th><th>End</th></tr></thead>
-          <tbody>
-            {% for d in days %}
-            <tr>
-              <td><input type="checkbox" name="work_{{ d.idx }}" id="work_{{ d.idx }}"
-                         {{ 'checked' if d.working }} onchange="toggleDay({{ d.idx }})"></td>
-              <td><label for="work_{{ d.idx }}">{{ d.name }}</label></td>
-              <td><input type="time" name="start_{{ d.idx }}" id="start_{{ d.idx }}"
-                         value="{{ d.start }}" {{ '' if d.working else 'disabled' }}></td>
-              <td><input type="time" name="end_{{ d.idx }}" id="end_{{ d.idx }}"
-                         value="{{ d.end }}" {{ '' if d.working else 'disabled' }}>
-                <div class="overnight" id="ov_{{ d.idx }}" hidden>ends next day</div></td>
-            </tr>
+
+      <form method="post" id="schedform">
+        {% for day in days %}
+        <div class="daysched">
+          <div class="daysched-head">
+            <strong>{{ day.name }}</strong>
+            <button type="button" class="btn small" onclick="addShift({{ day.idx }})">+ add shift</button>
+          </div>
+          <div class="shiftlist" id="shifts_{{ day.idx }}">
+            {% for sh in day.shifts %}
+            <div class="shiftrow">
+              <input type="hidden" name="sday" value="{{ day.idx }}">
+              <label>Start <input type="time" name="sstart" value="{{ sh.start }}" required></label>
+              <label>End <input type="time" name="send" value="{{ sh.end }}" required></label>
+              <span class="overnight" hidden>ends next day</span>
+              <button type="button" class="btn small ghost remove" onclick="removeShift(this)">✕</button>
+            </div>
             {% endfor %}
-          </tbody>
-        </table>
+          </div>
+          {% if not day.shifts %}<p class="muted off">Off</p>{% endif %}
+        </div>
+        {% endfor %}
         <div style="margin-top:1rem">
           <button type="submit" class="btn primary">Save Schedule</button>
         </div>
@@ -53,27 +55,37 @@
     </section>
   </main>
 
+  <template id="shiftTemplate">
+    <div class="shiftrow">
+      <input type="hidden" name="sday" value="">
+      <label>Start <input type="time" name="sstart" value="09:00" required></label>
+      <label>End <input type="time" name="send" value="17:00" required></label>
+      <span class="overnight" hidden>ends next day</span>
+      <button type="button" class="btn small ghost remove" onclick="removeShift(this)">✕</button>
+    </div>
+  </template>
+
   <script>
-    function checkOvernight(i) {
-      const on = document.getElementById('work_' + i).checked;
-      const s = document.getElementById('start_' + i).value;
-      const e = document.getElementById('end_' + i).value;
-      document.getElementById('ov_' + i).hidden = !(on && s && e && e <= s);
+    function markOvernight(row) {
+      var t = row.querySelectorAll('input[type=time]');
+      var note = row.querySelector('.overnight');
+      note.hidden = !(t[0].value && t[1].value && t[1].value <= t[0].value);
     }
-    function toggleDay(i) {
-      const on = document.getElementById('work_' + i).checked;
-      document.getElementById('start_' + i).disabled = !on;
-      document.getElementById('end_' + i).disabled = !on;
-      checkOvernight(i);
+    function addShift(day) {
+      var frag = document.getElementById('shiftTemplate').content.cloneNode(true);
+      frag.querySelector('input[name=sday]').value = day;
+      var off = document.querySelector('#shifts_' + day).parentNode.querySelector('.off');
+      if (off) off.remove();
+      var list = document.getElementById('shifts_' + day);
+      list.appendChild(frag);
+      markOvernight(list.lastElementChild);
     }
-    // Show the "ends next day" hint for overnight shifts, on load and on edit.
-    for (let i = 0; i < 7; i++) {
-      ['start_' + i, 'end_' + i].forEach(function (id) {
-        const el = document.getElementById(id);
-        if (el) el.addEventListener('change', function () { checkOvernight(i); });
-      });
-      checkOvernight(i);
-    }
+    function removeShift(btn) { btn.closest('.shiftrow').remove(); }
+    // Update the "ends next day" hint as times change (works for added rows too).
+    document.getElementById('schedform').addEventListener('input', function (e) {
+      if (e.target.type === 'time') markOvernight(e.target.closest('.shiftrow'));
+    });
+    document.querySelectorAll('.shiftrow').forEach(markOvernight);
   </script>
 </body>
 </html>

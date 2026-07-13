@@ -136,12 +136,14 @@ def summarize_employees():
     return result
 
 
-def schedule_for(conn, emp_id, on_date):
-    """Return (start_time, end_time) row for an employee on a given date, or None."""
+def schedules_for(conn, emp_id, on_date):
+    """All shifts (start_time, end_time) for an employee on a date, earliest first.
+    A weekday can now hold more than one shift."""
     return conn.execute(
-        "SELECT start_time, end_time FROM schedules WHERE employee_id=? AND weekday=?",
+        "SELECT start_time, end_time FROM schedules WHERE employee_id=? AND weekday=? "
+        "ORDER BY start_time",
         (emp_id, on_date.weekday()),
-    ).fetchone()
+    ).fetchall()
 
 
 def combine(on_date, hhmm):
@@ -158,6 +160,52 @@ def shift_end(on_date, start_hhmm, end_hhmm):
     if end_hhmm <= start_hhmm:
         end += timedelta(days=1)
     return end
+
+
+def _windows(conn, emp_id, on_date):
+    """(start_dt, end_dt) for each of the day's shifts, earliest first."""
+    return [
+        (combine(on_date, r["start_time"]),
+         shift_end(on_date, r["start_time"], r["end_time"]))
+        for r in schedules_for(conn, emp_id, on_date)
+    ]
+
+
+def resolve_clockin(conn, emp_id, name, now):
+    """Pick which shift a worker is clocking into at `now`, supporting multiple
+    shifts a day. Returns (start_dt, end_dt, None) on success, or
+    (None, None, message) explaining why they can't clock in."""
+    grace = timedelta(minutes=EARLY_GRACE_MIN)
+    todays = _windows(conn, emp_id, now.date())
+    # 1. inside a shift's clock-in window (from grace-before-start to its end)
+    for s, e in todays:
+        if s - grace <= now < e:
+            return s, e, None
+    # 2. a shift starting just after midnight tomorrow (early cross-midnight tap)
+    for s, e in _windows(conn, emp_id, now.date() + timedelta(days=1)):
+        if s - grace <= now < s:
+            return s, e, None
+        break  # sorted by start; only the earliest can reach back before midnight
+    # 3. nothing matched — the most helpful message
+    if not todays:
+        return None, None, f"{name} is not scheduled to work today."
+    upcoming = [s for s, e in todays if now < s - grace]
+    if upcoming:
+        return None, None, f"Too early — next shift starts at {min(upcoming).strftime('%-I:%M %p')}."
+    return None, None, f"Shift already ended at {max(e for s, e in todays).strftime('%-I:%M %p')}."
+
+
+def shift_of(conn, emp_id, cin):
+    """The (start_dt, end_dt) of the scheduled shift a clock-in belongs to (the
+    window containing it, else the nearest by start), or None if unscheduled."""
+    grace = timedelta(minutes=EARLY_GRACE_MIN)
+    wins = _windows(conn, emp_id, cin.date())
+    for s, e in wins:
+        if s - grace <= cin < e:
+            return s, e
+    if wins:
+        return min(wins, key=lambda se: abs((se[0] - cin).total_seconds()))
+    return None
 
 
 def fmt_time_label(hhmm):
@@ -259,12 +307,10 @@ def clock():
         # never pays past the shift (mirrors how early clock-in is capped at the
         # start). Leaving early still records the actual, earlier time.
         cin = datetime.fromisoformat(open_entry["clock_in"])
-        sched = schedule_for(conn, emp_id, cin.date())
+        shift = shift_of(conn, emp_id, cin)
         out_dt = now
-        if sched:
-            end_dt = shift_end(cin.date(), sched["start_time"], sched["end_time"])
-            if now > end_dt:
-                out_dt = end_dt
+        if shift and now > shift[1]:
+            out_dt = shift[1]  # cap at this shift's scheduled end
         if out_dt < cin:
             out_dt = cin
         conn.execute(
@@ -278,41 +324,13 @@ def clock():
                        time=out_dt.strftime("%-I:%M %p"))
 
     # ----- CLOCK IN -----
-    # Normally the shift scheduled for today. But if today has no active shift
-    # and one starts just after midnight (e.g. a 12:00 AM shift), allow an early
-    # tap for it within the grace window, so a worker clocking in a few minutes
-    # before midnight isn't turned away. Pay still starts at the scheduled start
-    # (clock_in is capped there); only the raw tap in actual_in is earlier.
-    grace = timedelta(minutes=EARLY_GRACE_MIN)
-    start_dt = end_dt = None
-    sched = schedule_for(conn, emp_id, now.date())
-    if sched:
-        s = combine(now.date(), sched["start_time"])
-        e = shift_end(now.date(), sched["start_time"], sched["end_time"])
-        if now < s - grace:
-            conn.close()
-            return jsonify(ok=False,
-                           message=f"Too early — shift starts at {s.strftime('%-I:%M %p')}.")
-        if now < e:
-            start_dt, end_dt = s, e
-
-    if start_dt is None:  # try a shift that starts just after midnight tomorrow
-        nxt_date = now.date() + timedelta(days=1)
-        nxt = schedule_for(conn, emp_id, nxt_date)
-        if nxt:
-            s = combine(nxt_date, nxt["start_time"])
-            if s - grace <= now < s:
-                start_dt = s
-                end_dt = shift_end(nxt_date, nxt["start_time"], nxt["end_time"])
-
-    if start_dt is None:
+    # Pick which shift they're clocking into (supports multiple shifts a day, and
+    # an early tap just before a midnight start). Pay starts at the scheduled
+    # start (clock_in is capped there); the raw tap is kept in actual_in.
+    start_dt, _end_dt, err = resolve_clockin(conn, emp_id, emp["name"], now)
+    if err:
         conn.close()
-        if sched:
-            e = shift_end(now.date(), sched["start_time"], sched["end_time"])
-            return jsonify(ok=False,
-                           message=f"Shift already ended at {e.strftime('%-I:%M %p')}.")
-        return jsonify(ok=False,
-                       message=f"{emp['name']} is not scheduled to work today.")
+        return jsonify(ok=False, message=err)
 
     clock_in = max(now, start_dt)  # never start the clock before the shift
     conn.execute(
@@ -334,10 +352,10 @@ def auto_clockout_once():
         "SELECT id, employee_id, clock_in FROM time_entries WHERE clock_out IS NULL"
     ).fetchall():
         cin = datetime.fromisoformat(e["clock_in"])
-        sched = schedule_for(conn, e["employee_id"], cin.date())
-        if not sched:
+        shift = shift_of(conn, e["employee_id"], cin)
+        if not shift:
             continue
-        end_dt = shift_end(cin.date(), sched["start_time"], sched["end_time"])
+        end_dt = shift[1]
         # Only close it once the overtime window has fully passed, and cap a
         # forgotten clock-out at the scheduled end (no unearned overtime).
         if now >= end_dt + timedelta(minutes=OVERTIME_GRACE_MIN):
@@ -572,54 +590,68 @@ def employee_schedule(emp_id):
         conn.close()
         abort(404)
     rows = conn.execute(
-        "SELECT weekday, start_time, end_time FROM schedules WHERE employee_id=?",
-        (emp_id,),
+        "SELECT weekday, start_time, end_time FROM schedules WHERE employee_id=? "
+        "ORDER BY weekday, start_time", (emp_id,),
     ).fetchall()
     conn.close()
-    by_day = {r["weekday"]: (r["start_time"], r["end_time"]) for r in rows}
-    days = [
-        {
-            "idx": i,
-            "name": DAYS[i],
-            "working": i in by_day,
-            "start": by_day.get(i, ("09:00", "17:00"))[0],
-            "end": by_day.get(i, ("09:00", "17:00"))[1],
-        }
-        for i in range(7)
-    ]
-    return render_template(
-        "schedule.html", emp=emp, days=days,
-        grace=EARLY_GRACE_MIN, overtime=OVERTIME_GRACE_MIN,
-    )
+    by_day = {}
+    for r in rows:
+        by_day.setdefault(r["weekday"], []).append(
+            {"start": r["start_time"], "end": r["end_time"]})
+    days = [{"idx": i, "name": DAYS[i], "shifts": by_day.get(i, [])} for i in range(7)]
+    return render_template("schedule.html", emp=emp, days=days, grace=EARLY_GRACE_MIN)
+
+
+def _shifts_overlap(a, b):
+    """a, b are (start_hhmm, end_hhmm). True if the two shifts overlap in time on
+    the same day (an overnight shift ends the next day)."""
+    d0 = datetime(2000, 1, 1)
+    a1, a2 = combine(d0, a[0]), shift_end(d0, a[0], a[1])
+    b1, b2 = combine(d0, b[0]), shift_end(d0, b[0], b[1])
+    return a1 < b2 and b1 < a2
 
 
 @app.post("/admin/employee/<int:emp_id>/schedule")
 @admin_required
 def save_schedule(emp_id):
+    # Shift rows arrive as parallel lists: one (sday, sstart, send) per shift.
+    by_day = {}
+    skipped = 0
+    for wd, s, e in zip(request.form.getlist("sday"),
+                        request.form.getlist("sstart"),
+                        request.form.getlist("send")):
+        try:
+            wd = int(wd)
+        except (TypeError, ValueError):
+            continue
+        if not (s and e) or s == e:
+            skipped += 1
+            continue
+        by_day.setdefault(wd, []).append((s, e))
+
     conn = db.get_db()
     conn.execute("DELETE FROM schedules WHERE employee_id=?", (emp_id,))
-    skipped = 0
-    for i in range(7):
-        if not request.form.get(f"work_{i}"):
-            continue
-        start = request.form.get(f"start_{i}")
-        end = request.form.get(f"end_{i}")
-        # end <= start means an overnight shift (ends next day); only equal or
-        # missing times are invalid. Previously overnight shifts were silently
-        # dropped here.
-        if start and end and start != end:
+    overlaps = 0
+    for wd, shifts in by_day.items():
+        accepted = []
+        for sh in sorted(shifts):
+            if any(_shifts_overlap(sh, a) for a in accepted):
+                overlaps += 1
+                continue
+            accepted.append(sh)
             conn.execute(
                 "INSERT INTO schedules (employee_id, weekday, start_time, end_time) "
-                "VALUES (?,?,?,?)",
-                (emp_id, i, start, end),
-            )
-        else:
-            skipped += 1
+                "VALUES (?,?,?,?)", (emp_id, wd, sh[0], sh[1]))
     conn.commit()
     conn.close()
+
+    notes = []
     if skipped:
-        flash(f"Schedule saved, but {skipped} day(s) were skipped — start and end "
-              "times can't be the same.", "error")
+        notes.append(f"{skipped} row(s) skipped (start and end can't match)")
+    if overlaps:
+        notes.append(f"{overlaps} overlapping shift(s) dropped")
+    if notes:
+        flash("Schedule saved — " + "; ".join(notes) + ".", "error")
     else:
         flash("Schedule saved.", "ok")
     return redirect(url_for("employee_schedule", emp_id=emp_id))
@@ -752,15 +784,23 @@ def _entries_by_day(conn, emp_id):
     return by_day
 
 
+def _grid_row(d, entry):
+    """A week-grid row prefilled from an existing time entry."""
+    cin = datetime.fromisoformat(entry["clock_in"])
+    cout = datetime.fromisoformat(entry["clock_out"]) if entry["clock_out"] else None
+    return {"date": d.isoformat(), "label": d.strftime("%a %b %-d"),
+            "entry_id": entry["id"], "working": True,
+            "start": cin.strftime("%H:%M"), "end": cout.strftime("%H:%M") if cout else ""}
+
+
 @app.get("/admin/employee/<int:emp_id>/week")
 @admin_required
 def employee_week(emp_id):
-    """Fill or edit a whole week of time entries at once.
+    """Fill or edit a whole week of time entries at once — one row per shift.
 
-    Each day is pre-filled in priority order: an existing single entry, else
-    the employee's weekly schedule, else blank. Days with more than one entry
-    are locked here (edited individually on the Entries page) so a bulk save
-    can never clobber a split shift.
+    Each scheduled shift becomes a row, pre-filled from the matching logged
+    entry if there is one, otherwise from the schedule. Any extra logged entries
+    show as their own rows, and an empty day gets one blank row for ad-hoc use.
     """
     conn = db.get_db()
     emp = conn.execute("SELECT * FROM employees WHERE id=?", (emp_id,)).fetchone()
@@ -776,29 +816,37 @@ def employee_week(emp_id):
     monday, sunday = week_bounds(ref)
 
     by_day = _entries_by_day(conn, emp_id)
-    days = []
+    grace = timedelta(minutes=EARLY_GRACE_MIN)
+    grid = []
     for i in range(7):
         d = monday + timedelta(days=i)
-        rows = by_day.get(d, [])
-        sched = schedule_for(conn, emp_id, d)
-        info = {"idx": i, "date": d.isoformat(), "label": d.strftime("%a %b %-d"),
-                "count": len(rows), "locked": False}
-        if len(rows) == 1:
-            cin = datetime.fromisoformat(rows[0]["clock_in"])
-            cout = datetime.fromisoformat(rows[0]["clock_out"]) if rows[0]["clock_out"] else None
-            info.update(working=True, start=cin.strftime("%H:%M"),
-                        end=cout.strftime("%H:%M") if cout else "")
-        elif len(rows) > 1:
-            info.update(working=True, locked=True, start="", end="")
-        elif sched:
-            info.update(working=True, start=sched["start_time"], end=sched["end_time"])
-        else:
-            info.update(working=False, start="09:00", end="17:00")
-        days.append(info)
+        entries = list(by_day.get(d, []))
+        used = set()
+        for sh in schedules_for(conn, emp_id, d):
+            s = combine(d, sh["start_time"])
+            e = shift_end(d, sh["start_time"], sh["end_time"])
+            match = next((en for en in entries if en["id"] not in used
+                          and s - grace <= datetime.fromisoformat(en["clock_in"]) < e), None)
+            if match:
+                used.add(match["id"])
+                grid.append(_grid_row(d, match))
+            else:  # scheduled shift with nothing logged yet — prefill from it
+                grid.append({"date": d.isoformat(), "label": d.strftime("%a %b %-d"),
+                             "entry_id": "", "working": True,
+                             "start": sh["start_time"], "end": sh["end_time"]})
+        for en in entries:  # logged entries that don't line up with a shift
+            if en["id"] not in used:
+                grid.append(_grid_row(d, en))
+        if not schedules_for(conn, emp_id, d) and not entries:  # off day, nothing logged
+            grid.append({"date": d.isoformat(), "label": d.strftime("%a %b %-d"),
+                         "entry_id": "", "working": False, "start": "09:00", "end": "17:00"})
+    for idx, row in enumerate(grid):
+        row["idx"] = idx
     conn.close()
 
     return render_template(
-        "week.html", emp=emp, days=days, wk_start=monday, wk_end=sunday,
+        "week.html", emp=emp, grid=grid, row_count=len(grid),
+        wk_start=monday, wk_end=sunday,
         prev_week=(monday - timedelta(days=7)).isoformat(),
         next_week=(monday + timedelta(days=7)).isoformat(),
         this_week=week_bounds()[0].isoformat(),
@@ -815,40 +863,35 @@ def save_week(emp_id):
         abort(404)
 
     week_start = request.form.get("week_start") or ""
-    try:
-        monday = datetime.fromisoformat(week_start).date()
-    except ValueError:
-        monday = week_bounds()[0]
-
-    by_day = _entries_by_day(conn, emp_id)
     created = updated = deleted = skipped = 0
-    for i in range(7):
-        d = monday + timedelta(days=i)
-        rows = by_day.get(d, [])
-        if not request.form.get(f"work_{i}"):
-            # Unchecking a day removes its single entry (multi-entry days are
-            # locked in the form and never reach here unchecked).
-            if len(rows) == 1:
-                conn.execute("DELETE FROM time_entries WHERE id=?", (rows[0]["id"],))
+    for r in range(int(request.form.get("row_count") or 0)):
+        try:
+            d = datetime.fromisoformat(request.form.get(f"date_{r}")).date()
+        except (TypeError, ValueError):
+            continue
+        entry_id = request.form.get(f"entry_{r}") or ""
+        if not request.form.get(f"work_{r}"):
+            # Unchecking a row that maps to an entry deletes that entry.
+            if entry_id:
+                conn.execute("DELETE FROM time_entries WHERE id=? AND employee_id=?",
+                             (entry_id, emp_id))
                 deleted += 1
             continue
-        start = request.form.get(f"start_{i}")
-        end = request.form.get(f"end_{i}")
-        # Never touch days with multiple entries, or rows with equal/missing
-        # times. end < start is fine — it's an overnight shift (ends next day).
-        if len(rows) > 1 or not (start and end) or start == end:
+        start = request.form.get(f"start_{r}")
+        end = request.form.get(f"end_{r}")
+        # end < start is fine (overnight); only equal/missing times are invalid.
+        if not (start and end) or start == end:
             skipped += 1
             continue
         cin = combine(d, start).isoformat(timespec="seconds")
         cout = shift_end(d, start, end).isoformat(timespec="seconds")
-        if len(rows) == 1:
-            conn.execute("UPDATE time_entries SET clock_in=?, clock_out=? WHERE id=?",
-                         (cin, cout, rows[0]["id"]))
+        if entry_id:
+            conn.execute("UPDATE time_entries SET clock_in=?, clock_out=? "
+                         "WHERE id=? AND employee_id=?", (cin, cout, entry_id, emp_id))
             updated += 1
         else:
-            conn.execute(
-                "INSERT INTO time_entries (employee_id, clock_in, clock_out) VALUES (?,?,?)",
-                (emp_id, cin, cout))
+            conn.execute("INSERT INTO time_entries (employee_id, clock_in, clock_out) "
+                         "VALUES (?,?,?)", (emp_id, cin, cout))
             created += 1
     conn.commit()
     conn.close()
@@ -861,7 +904,7 @@ def save_week(emp_id):
     if deleted:
         parts.append(f"{deleted} removed")
     if skipped:
-        parts.append(f"{skipped} skipped (bad times or multiple entries)")
+        parts.append(f"{skipped} skipped (equal or missing times)")
     flash("Week saved — " + (", ".join(parts) if parts else "no changes") + ".", "ok")
     return redirect(url_for("employee_week", emp_id=emp_id, start=week_start))
 

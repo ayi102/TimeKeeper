@@ -210,6 +210,17 @@ input:focus { outline: 2px solid var(--blue); border-color: var(--blue); }
 /* "ends next day" hint under an overnight shift's end time */
 .overnight { font-size: .7rem; color: var(--blue); margin-top: .25rem; }
 
+/* Multi-shift schedule editor */
+.daysched { border-bottom: 1px solid var(--panel-2); padding: .9rem 0; }
+.daysched:first-child { padding-top: 0; }
+.daysched-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.shiftlist { margin-top: .6rem; display: flex; flex-direction: column; gap: .6rem; }
+.shiftrow { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+.shiftrow label { display: flex; flex-direction: column; gap: .25rem; font-size: .8rem; color: var(--muted); }
+.shiftrow .overnight { margin: 0; }
+.shiftrow .remove { margin-left: auto; }
+.daysched .off { margin: .5rem 0 0; }
+
 /* Flash messages */
 .flash { padding: .75rem 1rem; border-radius: 10px; margin-bottom: 1rem; }
 .flash.error { background: rgba(239,68,68,.15); color: #fca5a5; }

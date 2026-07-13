@@ -27,7 +27,7 @@ Surfaces once running: `/` (kiosk), `/admin` (PIN-gated, default PIN `1234`), `/
 Three Python files plus Jinja templates and two static assets — read all three before changing behavior, since they share logic.
 
 - **[app.py](app.py)** — the whole web app: routes, schedule-enforcement logic, and the background auto-clockout thread. Module-level functions like `summarize_employees`, `period_summary`, `week_bounds`, `entry_seconds`, and `schedule_for` are the shared business logic.
-- **[db.py](db.py)** — SQLite access. `init_db()` creates the schema idempotently; every request opens and closes its own connection via `get_db()`. Tables: `employees`, `time_entries` (`clock_out` NULL means still clocked in), `payments`, `schedules` (one row per worked weekday, `weekday` is Python's `0=Mon..6=Sun`; a missing weekday means off).
+- **[db.py](db.py)** — SQLite access. `init_db()` creates the schema idempotently; every request opens and closes its own connection via `get_db()`. Tables: `employees`, `time_entries` (`clock_out` NULL means still clocked in), `payments`, `schedules` (one row per shift; a weekday can have several shifts, `weekday` is Python's `0=Mon..6=Sun`; a weekday with no rows means off), `clockin_alerts` (dedup for the missed-clock-in emailer).
 - **[weekly_email.py](weekly_email.py)** — `import app as tk` to **reuse** `period_summary`/`week_bounds`/`summarize_employees`; importing `app` does not start the server. Run by a systemd timer on the Pi.
 
 ### Concepts that span multiple files

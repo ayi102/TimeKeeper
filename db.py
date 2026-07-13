@@ -59,16 +59,17 @@ def init_db():
             note        TEXT,
             FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
         );
-        -- One row per worked weekday. A missing weekday means "off that day".
+        -- One row per shift. A weekday may have several rows (a worker can work
+        -- more than one shift in a day); a weekday with no rows means "off".
         CREATE TABLE IF NOT EXISTS schedules (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             employee_id INTEGER NOT NULL,
             weekday     INTEGER NOT NULL,   -- 0=Mon ... 6=Sun (Python weekday())
             start_time  TEXT    NOT NULL,   -- "HH:MM" 24h
             end_time    TEXT    NOT NULL,   -- "HH:MM" 24h
-            UNIQUE(employee_id, weekday),
             FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
         );
+        CREATE INDEX IF NOT EXISTS idx_sched_emp_wd ON schedules(employee_id, weekday);
         """
     )
     _migrate(conn)
@@ -89,6 +90,32 @@ def _migrate(conn):
         conn.execute("ALTER TABLE time_entries ADD COLUMN actual_in TEXT")
     if "actual_out" not in tcols:
         conn.execute("ALTER TABLE time_entries ADD COLUMN actual_out TEXT")
+
+    # Drop the old one-shift-per-weekday UNIQUE(employee_id, weekday) constraint
+    # so a worker can have several shifts in a day. SQLite can't drop a
+    # constraint in place, so rebuild the table (preserving every row). Nothing
+    # references `schedules`, so the drop/rename is safe with foreign keys on.
+    sched_sql = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='schedules'"
+    ).fetchone()
+    if sched_sql and "UNIQUE" in sched_sql[0].upper():
+        conn.executescript(
+            """
+            CREATE TABLE schedules_new (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_id INTEGER NOT NULL,
+                weekday     INTEGER NOT NULL,
+                start_time  TEXT    NOT NULL,
+                end_time    TEXT    NOT NULL,
+                FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+            );
+            INSERT INTO schedules_new (id, employee_id, weekday, start_time, end_time)
+                SELECT id, employee_id, weekday, start_time, end_time FROM schedules;
+            DROP TABLE schedules;
+            ALTER TABLE schedules_new RENAME TO schedules;
+            CREATE INDEX IF NOT EXISTS idx_sched_emp_wd ON schedules(employee_id, weekday);
+            """
+        )
 
 
 def now_iso():

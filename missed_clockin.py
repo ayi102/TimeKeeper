@@ -21,32 +21,34 @@ import db
 
 
 def find_missed(conn, now):
-    """Employees who should be clocked in by now for today's shift but aren't."""
+    """Per shift: employees who should be clocked in for a shift by now but
+    aren't. A worker with two shifts a day can miss (and alert on) each one."""
     missed = []
-    today = now.date().isoformat()
+    grace = timedelta(minutes=tk.EARLY_GRACE_MIN)
     for e in conn.execute("SELECT id, name FROM employees WHERE active=1").fetchall():
-        sched = tk.schedule_for(conn, e["id"], now.date())
-        if not sched:
-            continue
-        start = tk.combine(now.date(), sched["start_time"])
-        end = tk.shift_end(now.date(), sched["start_time"], sched["end_time"])
-        # Only within the shift, once the grace period past the start has passed.
-        if not (start + timedelta(minutes=tk.MISSED_CLOCKIN_MIN) <= now < end):
-            continue
-        clocked_in = conn.execute(
-            "SELECT 1 FROM time_entries WHERE employee_id=? AND substr(clock_in,1,10)=? LIMIT 1",
-            (e["id"], today),
-        ).fetchone()
-        if clocked_in:
-            continue
-        already = conn.execute(
-            "SELECT 1 FROM clockin_alerts WHERE employee_id=? AND shift_date=?",
-            (e["id"], today),
-        ).fetchone()
-        if already:
-            continue
-        missed.append({"id": e["id"], "name": e["name"],
-                       "start": tk.combine(now.date(), sched["start_time"])})
+        cins = [
+            datetime.fromisoformat(r["clock_in"])
+            for r in conn.execute(
+                "SELECT clock_in FROM time_entries WHERE employee_id=? AND substr(clock_in,1,10)=?",
+                (e["id"], now.date().isoformat()),
+            ).fetchall()
+        ]
+        for sh in tk.schedules_for(conn, e["id"], now.date()):
+            start = tk.combine(now.date(), sh["start_time"])
+            end = tk.shift_end(now.date(), sh["start_time"], sh["end_time"])
+            # Only within the shift, once the grace past its start has passed.
+            if not (start + timedelta(minutes=tk.MISSED_CLOCKIN_MIN) <= now < end):
+                continue
+            # Clocked in for THIS shift? (a tap landing in its window)
+            if any(start - grace <= c < end for c in cins):
+                continue
+            key = start.isoformat(timespec="seconds")  # per-shift dedup key
+            if conn.execute(
+                "SELECT 1 FROM clockin_alerts WHERE employee_id=? AND shift_date=?",
+                (e["id"], key),
+            ).fetchone():
+                continue
+            missed.append({"id": e["id"], "name": e["name"], "start": start, "key": key})
     return missed
 
 
@@ -93,7 +95,7 @@ def main():
         conn.execute(
             "INSERT OR IGNORE INTO clockin_alerts (employee_id, shift_date, sent_at) "
             "VALUES (?,?,?)",
-            (r["id"], now.date().isoformat(), db.now_iso()),
+            (r["id"], r["key"], db.now_iso()),
         )
     conn.commit()
     conn.close()

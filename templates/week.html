@@ -31,34 +31,33 @@
       </div>
 
       <p class="muted">
-        Check each day {{ emp.name }} worked and set the times. Days are pre-filled from
-        any logged entry, otherwise from their schedule. Saving creates or updates each
-        checked day's entry; <strong>unchecking</strong> a day that already has a logged
-        entry deletes it (you'll be asked to confirm). An end time earlier than the start
-        is treated as an overnight shift ending the next morning.
+        One row per shift. Rows are pre-filled from any logged entry, otherwise from
+        {{ emp.name }}'s schedule (a day can have more than one shift). Saving creates or
+        updates each checked row; <strong>unchecking</strong> a row that already has a
+        logged entry deletes it (you'll be asked to confirm). An end time earlier than the
+        start is treated as an overnight shift ending the next morning.
       </p>
 
       <form method="post" id="weekform">
         <input type="hidden" name="week_start" value="{{ wk_start.isoformat() }}">
+        <input type="hidden" name="row_count" value="{{ row_count }}">
         <table class="data sched">
           <thead><tr><th>Worked</th><th>Day</th><th>Start</th><th>End</th></tr></thead>
           <tbody>
-            {% for d in days %}
-            <tr class="{{ 'inactive' if d.locked }}">
+            {% for r in grid %}
+            <tr>
               <td>
-                {% if d.locked %}
-                  <span class="tag">{{ d.count }} entries</span>
-                {% else %}
-                  <input type="checkbox" name="work_{{ d.idx }}" id="work_{{ d.idx }}"
-                         {{ 'checked' if d.working }} onchange="toggleDay({{ d.idx }})"
-                         data-existing="{{ 1 if d.count == 1 else 0 }}" data-label="{{ d.label }}">
-                {% endif %}
+                <input type="hidden" name="date_{{ r.idx }}" value="{{ r.date }}">
+                <input type="hidden" name="entry_{{ r.idx }}" value="{{ r.entry_id }}">
+                <input type="checkbox" name="work_{{ r.idx }}" id="work_{{ r.idx }}"
+                       {{ 'checked' if r.working }} onchange="toggleRow({{ r.idx }})"
+                       data-existing="{{ 1 if r.entry_id else 0 }}" data-label="{{ r.label }}">
               </td>
-              <td><label for="work_{{ d.idx }}">{{ d.label }}</label></td>
-              <td><input type="time" name="start_{{ d.idx }}" id="start_{{ d.idx }}"
-                         value="{{ d.start }}" {{ 'disabled' if not d.working or d.locked }}></td>
-              <td><input type="time" name="end_{{ d.idx }}" id="end_{{ d.idx }}"
-                         value="{{ d.end }}" {{ 'disabled' if not d.working or d.locked }}></td>
+              <td><label for="work_{{ r.idx }}">{{ r.label }}</label></td>
+              <td><input type="time" name="start_{{ r.idx }}" id="start_{{ r.idx }}"
+                         value="{{ r.start }}" {{ 'disabled' if not r.working }}></td>
+              <td><input type="time" name="end_{{ r.idx }}" id="end_{{ r.idx }}"
+                         value="{{ r.end }}" {{ 'disabled' if not r.working }}></td>
             </tr>
             {% endfor %}
           </tbody>
@@ -71,7 +70,7 @@
   </main>
 
   <script>
-    function toggleDay(i) {
+    function toggleRow(i) {
       const on = document.getElementById('work_' + i).checked;
       document.getElementById('start_' + i).disabled = !on;
       document.getElementById('end_' + i).disabled = !on;
