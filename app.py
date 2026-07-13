@@ -31,9 +31,10 @@ ADMIN_PIN = os.environ.get("TIMEKEEPER_PIN", "1234")
 # scheduled start time (so no one is paid before their shift).
 EARLY_GRACE_MIN = int(os.environ.get("TIMEKEEPER_EARLY_GRACE_MIN", "15"))
 
-# How many minutes past the scheduled end a worker may still clock OUT themselves
-# (capturing a little overtime). If they never clock out, the auto clock-out caps
-# them at the scheduled end. Larger amounts are adjusted on the Entries page.
+# How many minutes past the scheduled end to wait before the background job
+# force-closes a forgotten open entry. Clock-out pay is always capped at the
+# scheduled end, so this only affects *when* a forgotten entry gets auto-closed,
+# not the hours. Genuine overtime is added on the Entries page.
 OVERTIME_GRACE_MIN = int(os.environ.get("TIMEKEEPER_OVERTIME_MIN", "60"))
 
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -243,16 +244,17 @@ def clock():
     now = datetime.now()
 
     if open_entry:
-        # ----- CLOCK OUT (allow up to OVERTIME_GRACE past the scheduled end) -----
+        # ----- CLOCK OUT -----
+        # The recorded time is capped at the scheduled end, so tapping out late
+        # never pays past the shift (mirrors how early clock-in is capped at the
+        # start). Leaving early still records the actual, earlier time.
         cin = datetime.fromisoformat(open_entry["clock_in"])
         sched = schedule_for(conn, emp_id, cin.date())
         out_dt = now
         if sched:
-            limit = shift_end(cin.date(), sched["start_time"], sched["end_time"]) + timedelta(
-                minutes=OVERTIME_GRACE_MIN
-            )
-            if now > limit:
-                out_dt = limit
+            end_dt = shift_end(cin.date(), sched["start_time"], sched["end_time"])
+            if now > end_dt:
+                out_dt = end_dt
         if out_dt < cin:
             out_dt = cin
         conn.execute(

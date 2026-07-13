@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 timekeeper.db
+backups/
 cookies.txt
 deploy/mail.env
 deploy/timekeeper.env

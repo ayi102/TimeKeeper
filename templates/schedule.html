@@ -21,10 +21,10 @@
     <section class="card">
       <p class="muted">
         Check each day {{ emp.name }} works and set the shift times. On working days they
-        can clock in starting {{ grace }} minutes before the start time. They may clock
-        themselves out up to {{ overtime }} minutes past the end time (for occasional
-        overtime); if they forget, they're automatically clocked out at the end time.
-        Unchecked days are days off — they can't clock in.
+        can clock in starting {{ grace }} minutes before the start time (recorded at the
+        start — no pay before the shift). Clocking out is capped at the end time, so tapping
+        out late doesn't add hours; if they forget, they're auto-clocked-out at the end.
+        Leaving early records the earlier time. Unchecked days are days off — they can't clock in.
         <strong>Overnight shifts:</strong> set an end time earlier than the start
         (e.g. 7:00 PM to 7:00 AM) and it runs into the next morning.
       </p>
