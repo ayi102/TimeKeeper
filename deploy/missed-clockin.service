@@ -1,0 +1,11 @@
+[Unit]
+Description=TimeKeeper missed clock-in alert
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ayi102
+WorkingDirectory=/home/ayi102/TimeKeeper
+EnvironmentFile=/home/ayi102/TimeKeeper/deploy/mail.env
+ExecStart=/home/ayi102/TimeKeeper/.venv/bin/python missed_clockin.py

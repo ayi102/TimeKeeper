@@ -26,11 +26,26 @@ def init_db():
             hourly_rate REAL    NOT NULL DEFAULT 0,
             active      INTEGER NOT NULL DEFAULT 1
         );
+        -- clock_in/clock_out are the PAYABLE times (capped to the schedule).
+        -- actual_in/actual_out record the exact taps for the audit trail; a set
+        -- actual_in with a NULL actual_out but a non-NULL clock_out means the
+        -- worker never tapped out and was auto-closed (needs review).
         CREATE TABLE IF NOT EXISTS time_entries (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             employee_id INTEGER NOT NULL,
-            clock_in    TEXT    NOT NULL,   -- ISO 8601 local time
-            clock_out   TEXT,               -- NULL while clocked in
+            clock_in    TEXT    NOT NULL,   -- ISO 8601 local time (payable)
+            clock_out   TEXT,               -- NULL while clocked in (payable)
+            actual_in   TEXT,               -- exact tap-in  (NULL for manual entries)
+            actual_out  TEXT,               -- exact tap-out (NULL if never tapped out)
+            FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+        );
+        -- One row per missed-clock-in alert already emailed, so the checker
+        -- never sends a duplicate for the same shift.
+        CREATE TABLE IF NOT EXISTS clockin_alerts (
+            employee_id INTEGER NOT NULL,
+            shift_date  TEXT    NOT NULL,   -- date of the missed shift's start
+            sent_at     TEXT    NOT NULL,
+            UNIQUE(employee_id, shift_date),
             FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
         );
         -- A recorded payout to an employee. `amount` is wages (reduces what's
@@ -68,6 +83,12 @@ def _migrate(conn):
     cols = {row["name"] for row in conn.execute("PRAGMA table_info(payments)")}
     if "tip" not in cols:
         conn.execute("ALTER TABLE payments ADD COLUMN tip REAL NOT NULL DEFAULT 0")
+
+    tcols = {row["name"] for row in conn.execute("PRAGMA table_info(time_entries)")}
+    if "actual_in" not in tcols:
+        conn.execute("ALTER TABLE time_entries ADD COLUMN actual_in TEXT")
+    if "actual_out" not in tcols:
+        conn.execute("ALTER TABLE time_entries ADD COLUMN actual_out TEXT")
 
 
 def now_iso():

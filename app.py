@@ -37,6 +37,10 @@ EARLY_GRACE_MIN = int(os.environ.get("TIMEKEEPER_EARLY_GRACE_MIN", "15"))
 # not the hours. Genuine overtime is added on the Entries page.
 OVERTIME_GRACE_MIN = int(os.environ.get("TIMEKEEPER_OVERTIME_MIN", "60"))
 
+# Minutes after a scheduled start with no clock-in before the missed-clock-in
+# checker (missed_clockin.py, run by a systemd timer) emails an alert.
+MISSED_CLOCKIN_MIN = int(os.environ.get("TIMEKEEPER_MISSED_MIN", "30"))
+
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 WIFI_CTL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "deploy", "wifi_ctl.sh")
@@ -78,7 +82,13 @@ def fmt_hours(seconds):
     return round(seconds / 3600.0, 2)
 
 
+def fmt_time(ts):
+    d = parse(ts)
+    return d.strftime("%-I:%M %p") if d else ""
+
+
 app.jinja_env.filters["fmt_dt"] = fmt_dt
+app.jinja_env.filters["fmt_time"] = fmt_time
 
 
 def summarize_employees():
@@ -258,8 +268,9 @@ def clock():
         if out_dt < cin:
             out_dt = cin
         conn.execute(
-            "UPDATE time_entries SET clock_out=? WHERE id=?",
-            (out_dt.isoformat(timespec="seconds"), open_entry["id"]),
+            "UPDATE time_entries SET clock_out=?, actual_out=? WHERE id=?",
+            (out_dt.isoformat(timespec="seconds"),
+             now.isoformat(timespec="seconds"), open_entry["id"]),
         )
         conn.commit()
         conn.close()
@@ -287,8 +298,9 @@ def clock():
 
     clock_in = max(now, start_dt)  # never start the clock before the shift
     conn.execute(
-        "INSERT INTO time_entries (employee_id, clock_in) VALUES (?, ?)",
-        (emp_id, clock_in.isoformat(timespec="seconds")),
+        "INSERT INTO time_entries (employee_id, clock_in, actual_in) VALUES (?, ?, ?)",
+        (emp_id, clock_in.isoformat(timespec="seconds"),
+         now.isoformat(timespec="seconds")),
     )
     conn.commit()
     conn.close()
@@ -506,16 +518,23 @@ def employee_entries(emp_id):
     conn.close()
 
     now = datetime.now()
-    entries = [
-        {
-            "id": r["id"],
-            "clock_in": r["clock_in"],
-            "clock_out": r["clock_out"],
-            "hours": fmt_hours(entry_seconds(r, now)),
-            "open": r["clock_out"] is None,
-        }
-        for r in rows
-    ]
+    entries = []
+    for r in rows:
+        ai, ao = r["actual_in"], r["actual_out"]
+        entries.append(
+            {
+                "id": r["id"],
+                "clock_in": r["clock_in"],
+                "clock_out": r["clock_out"],
+                "hours": fmt_hours(entry_seconds(r, now)),
+                "open": r["clock_out"] is None,
+                # Show the exact tap only when it differs from the payable time.
+                "actual_in": ai if ai and ai != r["clock_in"] else None,
+                "actual_out": ao if ao and ao != r["clock_out"] else None,
+                # Clocked in but auto-closed without ever tapping out.
+                "needs_review": r["clock_out"] is not None and ai is not None and ao is None,
+            }
+        )
     return render_template("entries.html", emp=emp, entries=entries)
 
 

@@ -1,0 +1,13 @@
+[Unit]
+Description=Check for missed clock-ins periodically
+
+[Timer]
+# Every 5 minutes. With a 30-minute default threshold, an alert goes out within
+# ~5 minutes of a worker being late. Not Persistent: we don't want a backlog of
+# stale alerts firing after the Pi was off (the check is bounded to the shift
+# window anyway).
+OnCalendar=*:0/5
+Persistent=false
+
+[Install]
+WantedBy=timers.target
