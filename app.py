@@ -277,24 +277,42 @@ def clock():
         return jsonify(ok=True, action="out", name=emp["name"],
                        time=out_dt.strftime("%-I:%M %p"))
 
-    # ----- CLOCK IN (must be within the scheduled window) -----
+    # ----- CLOCK IN -----
+    # Normally the shift scheduled for today. But if today has no active shift
+    # and one starts just after midnight (e.g. a 12:00 AM shift), allow an early
+    # tap for it within the grace window, so a worker clocking in a few minutes
+    # before midnight isn't turned away. Pay still starts at the scheduled start
+    # (clock_in is capped there); only the raw tap in actual_in is earlier.
+    grace = timedelta(minutes=EARLY_GRACE_MIN)
+    start_dt = end_dt = None
     sched = schedule_for(conn, emp_id, now.date())
-    if not sched:
+    if sched:
+        s = combine(now.date(), sched["start_time"])
+        e = shift_end(now.date(), sched["start_time"], sched["end_time"])
+        if now < s - grace:
+            conn.close()
+            return jsonify(ok=False,
+                           message=f"Too early — shift starts at {s.strftime('%-I:%M %p')}.")
+        if now < e:
+            start_dt, end_dt = s, e
+
+    if start_dt is None:  # try a shift that starts just after midnight tomorrow
+        nxt_date = now.date() + timedelta(days=1)
+        nxt = schedule_for(conn, emp_id, nxt_date)
+        if nxt:
+            s = combine(nxt_date, nxt["start_time"])
+            if s - grace <= now < s:
+                start_dt = s
+                end_dt = shift_end(nxt_date, nxt["start_time"], nxt["end_time"])
+
+    if start_dt is None:
         conn.close()
+        if sched:
+            e = shift_end(now.date(), sched["start_time"], sched["end_time"])
+            return jsonify(ok=False,
+                           message=f"Shift already ended at {e.strftime('%-I:%M %p')}.")
         return jsonify(ok=False,
                        message=f"{emp['name']} is not scheduled to work today.")
-
-    start_dt = combine(now.date(), sched["start_time"])
-    end_dt = shift_end(now.date(), sched["start_time"], sched["end_time"])
-
-    if now < start_dt - timedelta(minutes=EARLY_GRACE_MIN):
-        conn.close()
-        return jsonify(ok=False,
-                       message=f"Too early — shift starts at {start_dt.strftime('%-I:%M %p')}.")
-    if now >= end_dt:
-        conn.close()
-        return jsonify(ok=False,
-                       message=f"Shift already ended at {end_dt.strftime('%-I:%M %p')}.")
 
     clock_in = max(now, start_dt)  # never start the clock before the shift
     conn.execute(
