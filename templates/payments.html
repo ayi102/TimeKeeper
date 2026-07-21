@@ -25,7 +25,7 @@
         <div class="stat"><span class="stat-label">Paid</span>
           <span class="stat-val">${{ '%.2f'|format(emp.paid) }}</span></div>
         <div class="stat owed"><span class="stat-label">Still owed</span>
-          <span class="stat-val">${{ '%.2f'|format(emp.owed) }}</span></div>
+          <span class="stat-val">${{ '%.2f'|format(emp.owed_due) }}</span></div>
         <div class="stat"><span class="stat-label">Tips</span>
           <span class="stat-val">${{ '%.2f'|format(emp.tips) }}</span></div>
       </div>
@@ -36,7 +36,7 @@
       <form method="post" action="{{ url_for('record_payout', emp_id=emp.id) }}" class="rowform">
         <label>Pay ($)
           <input type="number" name="amount" min="0" step="0.01"
-                 value="{{ '%.2f'|format(emp.owed if emp.owed > 0 else 0) }}"></label>
+                 value="{{ '%.2f'|format(emp.owed_due) }}"></label>
         <label>Tip ($)
           <input type="number" name="tip" min="0" step="0.01" value="0.00"></label>
         <label>Note (optional)
@@ -45,9 +45,10 @@
           <button type="submit" class="btn primary">Mark Paid</button>
         </div>
       </form>
-      <p class="muted">Pay defaults to the balance owed (change it for a partial payment). Tip is extra and
-        does not affect what's owed. If you pay more than the balance owed, the extra is
-        recorded as a tip (so the balance never goes negative). A payout needs pay or tip above zero.</p>
+      <p class="muted">Owed is rounded <strong>up to the whole dollar</strong>, and Pay defaults to it
+        (change it for a partial payment). Tip is extra and doesn't affect what's owed. Paying more than
+        the exact balance — including those rounded-up cents — is recorded as a tip, so the balance never
+        goes negative. A payout needs pay or tip above zero.</p>
     </section>
 
     <section class="card">

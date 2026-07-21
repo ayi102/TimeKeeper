@@ -54,7 +54,7 @@
             <td>{{ e.hours }}</td>
             <td>${{ '%.2f'|format(e.pay) }}</td>
             <td>${{ '%.2f'|format(e.paid) }}</td>
-            <td class="{{ 'owed-pos' if e.owed > 0 else '' }}">${{ '%.2f'|format(e.owed) }}</td>
+            <td class="{{ 'owed-pos' if e.owed_due > 0 else '' }}">${{ '%.2f'|format(e.owed_due) }}</td>
             <td>${{ '%.2f'|format(e.tips) }}</td>
           </tr>
           {% endfor %}

@@ -61,7 +61,7 @@ def build(week_rows, alltime_by_id):
         if not (w["active"] or w["hours"] > 0):
             continue
         a = alltime_by_id.get(w["id"], {})
-        rows.append({**w, "paid": a.get("paid", 0.0), "owed": a.get("owed", 0.0),
+        rows.append({**w, "paid": a.get("paid", 0.0), "owed": a.get("owed_due", 0.0),
                      "tips": a.get("tips", 0.0)})
     totals = {
         "hours": round(sum(r["hours"] for r in rows), 2),

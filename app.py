@@ -5,6 +5,7 @@ Two surfaces:
   /admin   management: opened from a phone/laptop. PIN-gated. Manage employees,
            hourly rates, view accrued pay, and fix time entries.
 """
+import math
 import os
 import socket
 import subprocess
@@ -119,6 +120,7 @@ def summarize_employees():
         hours = fmt_hours(total_seconds)
         pay = round(hours * emp["hourly_rate"], 2)
         paid = round(paid_by.get(emp["id"], 0.0), 2)
+        owed = round(pay - paid, 2)
         result.append(
             {
                 "id": emp["id"],
@@ -129,7 +131,10 @@ def summarize_employees():
                 "hours": hours,
                 "pay": pay,
                 "paid": paid,
-                "owed": round(pay - paid, 2),
+                "owed": owed,  # exact, used for the payout/tip math
+                # Owed rounded UP to a whole dollar — what to actually pay out.
+                # The cents between this and `owed` become a tip on payout.
+                "owed_due": float(math.ceil(owed)) if owed > 0 else 0.0,
                 "tips": round(tips_by.get(emp["id"], 0.0), 2),
             }
         )
@@ -469,7 +474,7 @@ def admin_logout():
 def admin():
     employees = summarize_employees()
     grand_total = round(sum(e["pay"] for e in employees), 2)
-    total_owed = round(sum(e["owed"] for e in employees), 2)
+    total_owed = round(sum(e["owed_due"] for e in employees), 2)
     total_tips = round(sum(e["tips"] for e in employees), 2)
     return render_template(
         "admin.html", employees=employees, grand_total=grand_total,
@@ -494,7 +499,7 @@ def admin_summary():
         all_hours=round(sum(e["hours"] for e in alltime), 2),
         all_total=round(sum(e["pay"] for e in alltime), 2),
         all_paid=round(sum(e["paid"] for e in alltime), 2),
-        all_owed=round(sum(e["owed"] for e in alltime), 2),
+        all_owed=round(sum(e["owed_due"] for e in alltime), 2),
         all_tips=round(sum(e["tips"] for e in alltime), 2),
     )
 

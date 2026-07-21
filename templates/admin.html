@@ -41,7 +41,7 @@
             <td data-label="Hours">{{ e.hours }}</td>
             <td data-label="Earned">${{ '%.2f'|format(e.pay) }}</td>
             <td data-label="Paid">${{ '%.2f'|format(e.paid) }}</td>
-            <td data-label="Owed" class="{{ 'owed-pos' if e.owed > 0 else '' }}">${{ '%.2f'|format(e.owed) }}</td>
+            <td data-label="Owed" class="{{ 'owed-pos' if e.owed_due > 0 else '' }}">${{ '%.2f'|format(e.owed_due) }}</td>
             <td data-label="Tips">${{ '%.2f'|format(e.tips) }}</td>
             <td class="actions">
               <a class="btn small primary" href="{{ url_for('employee_payments', emp_id=e.id) }}">Pay Out</a>
