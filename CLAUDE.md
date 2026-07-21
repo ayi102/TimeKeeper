@@ -49,6 +49,8 @@ Three Python files plus Jinja templates and two static assets — read all three
 
 The target is a Pi at `/home/ayi102/TimeKeeper` with a 3.5" touchscreen. See [deploy/](deploy/):
 
+- **Provision / rebuild a fresh Pi**: [deploy/setup.sh](deploy/setup.sh) does it in one command — packages, venv, DB restore from a backup, systemd services/timers, WiFi sudoers, and kiosk autostart. [deploy/deploy.sh](deploy/deploy.sh) syncs code + restarts for ongoing changes. The 3.5" SPI screen needs a model-specific driver, done separately — see [deploy/lcd-setup.md](deploy/lcd-setup.md).
+
 - **[deploy/timekeeper.service](deploy/timekeeper.service)** — systemd unit running the app on port 80 (`CAP_NET_BIND_SERVICE`), ordered `After=network.target` only (deliberately does *not* wait for connectivity, so the kiosk works offline on localhost).
 - **[deploy/kiosk.sh](deploy/kiosk.sh)** — launched from [deploy/lxde-autostart](deploy/lxde-autostart); waits for the server, then runs Chromium full-screen in `--kiosk --incognito` with its cache in RAM (`/dev/shm`) to spare the SD card. It self-respawns Chromium on crash, but exits to the desktop when the app touches the `/tmp/kiosk-exit` flag (written by `POST /api/exit-kiosk`).
 - **WiFi from the kiosk**: `POST /api/wifi/*` shells out to [deploy/wifi_ctl.sh](deploy/wifi_ctl.sh) via `sudo` (it edits `wpa_supplicant.conf` with `wpa_cli`). This path only works on the Pi.

@@ -66,15 +66,15 @@ if [ ! -f "$SUDOERS" ]; then
   echo "  installed $SUDOERS"
 fi
 
-echo "→ Kiosk autostart (Chromium full-screen on boot)"
+echo "→ Kiosk on boot (desktop autologin + Chromium autostart)"
+sudo raspi-config nonint do_boot_behaviour B4 \
+  && echo "  desktop autologin enabled" \
+  || echo "  (couldn't set autologin — enable 'Desktop Autologin' in raspi-config)"
 AUTOSTART="$HOME/.config/lxsession/LXDE-pi/autostart"
-if [ -d "$(dirname "$AUTOSTART")" ]; then
-  cp deploy/lxde-autostart "$AUTOSTART"
-  echo "  installed $AUTOSTART"
-else
-  echo "  (skipped — no LXDE-pi session dir; on newer Pi OS the kiosk autostart"
-  echo "   differs — set deploy/kiosk.sh to run on login for that desktop)"
-fi
+mkdir -p "$(dirname "$AUTOSTART")"
+cp deploy/lxde-autostart "$AUTOSTART"
+echo "  autostart installed at $AUTOSTART"
+echo "  NOTE: the 3.5\" SPI touchscreen needs its own driver — see deploy/lcd-setup.md"
 
 echo
 echo "✓ Setup complete. Final steps:"
