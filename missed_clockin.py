@@ -6,7 +6,7 @@ each active employee scheduled today, if the scheduled start passed more than
 MISSED_CLOCKIN_MIN minutes ago, they still haven't clocked in, and we haven't
 already alerted for that shift, send one email and record it so it never repeats.
 
-SMTP settings come from the same env as the weekly email (deploy/mail.env):
+SMTP settings come from the same env as the summary email (deploy/mail.env):
   MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASSWORD, MAIL_TO, MAIL_FROM
 """
 import os

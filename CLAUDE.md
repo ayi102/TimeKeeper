@@ -18,7 +18,7 @@ PORT=8080 TIMEKEEPER_PIN=1234 .venv/bin/python app.py
 # Send the summary email by hand (needs MAIL_* env vars; --this-week reports the
 # current week instead of the previous full week). Sends the hours summary with a
 # full DB backup attached; runs daily on the Pi via a systemd timer.
-.venv/bin/python weekly_email.py --this-week
+.venv/bin/python summary_email.py --this-week
 ```
 
 Surfaces once running: `/` (kiosk), `/admin` (PIN-gated, default PIN `1234`), `/admin/summary`, `/settings` (WiFi — only functional on the Pi).
@@ -29,7 +29,7 @@ Three Python files plus Jinja templates and two static assets — read all three
 
 - **[app.py](app.py)** — the whole web app: routes, schedule-enforcement logic, and the background auto-clockout thread. Module-level functions like `summarize_employees`, `period_summary`, `week_bounds`, `entry_seconds`, and `schedule_for` are the shared business logic.
 - **[db.py](db.py)** — SQLite access. `init_db()` creates the schema idempotently; every request opens and closes its own connection via `get_db()`. Tables: `employees`, `time_entries` (`clock_out` NULL means still clocked in), `payments`, `schedules` (one row per shift; a weekday can have several shifts, `weekday` is Python's `0=Mon..6=Sun`; a weekday with no rows means off), `clockin_alerts` (dedup for the missed-clock-in emailer).
-- **[weekly_email.py](weekly_email.py)** — `import app as tk` to **reuse** `period_summary`/`week_bounds`/`summarize_employees`; importing `app` does not start the server. Run by a systemd timer on the Pi.
+- **[summary_email.py](summary_email.py)** — `import app as tk` to **reuse** `period_summary`/`week_bounds`/`summarize_employees`; importing `app` does not start the server. Run by a systemd timer on the Pi.
 
 ### Concepts that span multiple files
 
@@ -38,7 +38,7 @@ Three Python files plus Jinja templates and two static assets — read all three
   - Clock-in is blocked before `start - EARLY_GRACE_MIN` and after the shift end; a within-grace early clock-in is recorded **at** the scheduled start (no pay before the shift). No schedule for today ⇒ can't clock in.
   - Self clock-out is allowed up to `end + OVERTIME_GRACE_MIN`, then capped at `end`.
   - A background daemon thread (`auto_clockout_loop`, started in `__main__`) closes forgotten open entries once the overtime window passes, capping them at the scheduled end. This thread only runs when the app is launched via `app.py` — not on bare `import app`.
-- **Pay model**: `pay = hours * hourly_rate`. "Owed" = accrued pay minus recorded `payments`. The weekly email mixes *this-week* hours/earned with *running* paid/owed totals — keep that distinction if you touch `weekly_email.build`.
+- **Pay model**: `pay = hours * hourly_rate`. "Owed" = accrued pay minus recorded `payments`. The summary email mixes *this-week* hours/earned with *running* paid/owed totals — keep that distinction if you touch `summary_email.build`.
 - **Money/hours rounding**: hours are `round(seconds/3600, 2)`; dollar amounts are rounded to 2 decimals at each aggregation step. Match this when adding totals.
 
 ### Config (environment variables)
@@ -54,6 +54,6 @@ The target is a Pi at `/home/ayi102/TimeKeeper` with a 3.5" touchscreen. See [de
 - **[deploy/timekeeper.service](deploy/timekeeper.service)** — systemd unit running the app on port 80 (`CAP_NET_BIND_SERVICE`), ordered `After=network.target` only (deliberately does *not* wait for connectivity, so the kiosk works offline on localhost).
 - **[deploy/kiosk.sh](deploy/kiosk.sh)** — launched from [deploy/lxde-autostart](deploy/lxde-autostart); waits for the server, then runs Chromium full-screen in `--kiosk --incognito` with its cache in RAM (`/dev/shm`) to spare the SD card. It self-respawns Chromium on crash, but exits to the desktop when the app touches the `/tmp/kiosk-exit` flag (written by `POST /api/exit-kiosk`).
 - **WiFi from the kiosk**: `POST /api/wifi/*` shells out to [deploy/wifi_ctl.sh](deploy/wifi_ctl.sh) via `sudo` (it edits `wpa_supplicant.conf` with `wpa_cli`). This path only works on the Pi.
-- **[deploy/timekeeper-daily.{service,timer}](deploy/)** — timer fires daily at 06:00 (`Persistent=true` catches up after downtime) and runs `weekly_email.py --this-week`, which emails the week-to-date summary with a full DB backup (`.db.gz`) attached — so backups arrive daily.
+- **[deploy/timekeeper-daily.{service,timer}](deploy/)** — timer fires daily at 06:00 (`Persistent=true` catches up after downtime) and runs `summary_email.py --this-week`, which emails the week-to-date summary with a full DB backup (`.db.gz`) attached — so backups arrive daily.
 
 `timekeeper.db`, `deploy/mail.env`, and `deploy/timekeeper.env` are git-ignored — never commit them. Use `deploy/mail.env.example` as the template.

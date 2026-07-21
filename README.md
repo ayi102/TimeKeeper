@@ -11,7 +11,7 @@ schedules, hourly rates, payouts, and reports from any device on the network.
 - **Admin** (`/admin`, PIN-protected) — manage employees, rates, schedules, time
   entries, and record payouts (tracks Earned → Paid → Owed).
 - **Summary** (`/admin/summary`) — this-week and all-time hours/pay/owed, printable.
-- **Weekly email** — a summary emailed automatically every week.
+- **Daily email** — a summary emailed automatically every morning, with a full database backup attached.
 
 ## Stack
 Python + Flask + SQLite, served by waitress. No build step.
@@ -33,5 +33,5 @@ PORT=8080 TIMEKEEPER_PIN=1234 .venv/bin/python app.py
 
 ## Deployment (Raspberry Pi)
 See [deploy/](deploy/): a systemd service runs the app on boot, Chromium
-auto-launches in kiosk mode, and a systemd timer sends the weekly email.
+auto-launches in kiosk mode, and a systemd timer sends the daily summary email.
 Mail settings live in `deploy/mail.env` (git-ignored).

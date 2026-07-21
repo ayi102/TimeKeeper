@@ -26,7 +26,7 @@ import db
 def db_snapshot_gz():
     """A gzipped, consistent snapshot of the whole database via SQLite's online
     backup (safe even mid-write). Written to RAM (/dev/shm when available) to
-    avoid SD-card wear, then removed. Attached to the weekly email so every send
+    avoid SD-card wear, then removed. Attached to the summary email so every send
     doubles as an off-site backup that can restore the entire history."""
     ramdir = "/dev/shm" if os.path.isdir("/dev/shm") else tempfile.gettempdir()
     tmp = os.path.join(ramdir, "tk-backup.db")
@@ -155,7 +155,7 @@ def main():
     msg.set_content(render_text(start, end, rows, totals))
     msg.add_alternative(render_html(start, end, rows, totals), subtype="html")
 
-    # Attach a full DB snapshot so the weekly email doubles as an off-site
+    # Attach a full DB snapshot so the summary email doubles as an off-site
     # backup. Best-effort: a backup failure must never block the summary.
     try:
         msg.add_attachment(db_snapshot_gz(), maintype="application", subtype="gzip",
