@@ -1,0 +1,12 @@
+[Unit]
+Description=Send the TimeKeeper daily summary + database backup
+
+[Timer]
+# Every day at 6:00 AM. The email reports this week's hours so far and carries a
+# full database backup, so a fresh restore point lands in the inbox daily.
+# Persistent catches up a single send if the Pi was off at 6 AM.
+OnCalendar=*-*-* 06:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

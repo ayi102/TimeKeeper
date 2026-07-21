@@ -50,12 +50,12 @@ fi
 
 echo "→ systemd services + timers"
 sudo cp deploy/timekeeper.service \
-        deploy/timekeeper-weekly.service deploy/timekeeper-weekly.timer \
+        deploy/timekeeper-daily.service deploy/timekeeper-daily.timer \
         deploy/missed-clockin.service deploy/missed-clockin.timer \
         /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now timekeeper.service
-sudo systemctl enable --now timekeeper-weekly.timer
+sudo systemctl enable --now timekeeper-daily.timer
 sudo systemctl enable --now missed-clockin.timer
 
 echo "→ WiFi control sudoers (lets the Settings page change WiFi)"

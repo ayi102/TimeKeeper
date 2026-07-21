@@ -1,5 +1,5 @@
 [Unit]
-Description=TimeKeeper weekly hours email
+Description=TimeKeeper daily hours summary + database backup email
 After=network-online.target
 Wants=network-online.target
 

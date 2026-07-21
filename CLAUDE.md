@@ -15,8 +15,9 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 # Run locally (creates ./timekeeper.db on first start)
 PORT=8080 TIMEKEEPER_PIN=1234 .venv/bin/python app.py
 
-# Send the weekly email by hand (needs MAIL_* env vars; --this-week reports the
-# current week instead of the previous full week)
+# Send the summary email by hand (needs MAIL_* env vars; --this-week reports the
+# current week instead of the previous full week). Sends the hours summary with a
+# full DB backup attached; runs daily on the Pi via a systemd timer.
 .venv/bin/python weekly_email.py --this-week
 ```
 
@@ -51,6 +52,6 @@ The target is a Pi at `/home/ayi102/TimeKeeper` with a 3.5" touchscreen. See [de
 - **[deploy/timekeeper.service](deploy/timekeeper.service)** — systemd unit running the app on port 80 (`CAP_NET_BIND_SERVICE`), ordered `After=network.target` only (deliberately does *not* wait for connectivity, so the kiosk works offline on localhost).
 - **[deploy/kiosk.sh](deploy/kiosk.sh)** — launched from [deploy/lxde-autostart](deploy/lxde-autostart); waits for the server, then runs Chromium full-screen in `--kiosk --incognito` with its cache in RAM (`/dev/shm`) to spare the SD card. It self-respawns Chromium on crash, but exits to the desktop when the app touches the `/tmp/kiosk-exit` flag (written by `POST /api/exit-kiosk`).
 - **WiFi from the kiosk**: `POST /api/wifi/*` shells out to [deploy/wifi_ctl.sh](deploy/wifi_ctl.sh) via `sudo` (it edits `wpa_supplicant.conf` with `wpa_cli`). This path only works on the Pi.
-- **[deploy/timekeeper-weekly.{service,timer}](deploy/)** — timer fires Sundays 20:00 (`Persistent=true` catches up after downtime) and runs `weekly_email.py --this-week`.
+- **[deploy/timekeeper-daily.{service,timer}](deploy/)** — timer fires daily at 06:00 (`Persistent=true` catches up after downtime) and runs `weekly_email.py --this-week`, which emails the week-to-date summary with a full DB backup (`.db.gz`) attached — so backups arrive daily.
 
 `timekeeper.db`, `deploy/mail.env`, and `deploy/timekeeper.env` are git-ignored — never commit them. Use `deploy/mail.env.example` as the template.

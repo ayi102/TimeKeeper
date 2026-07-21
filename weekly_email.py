@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Email a weekly hours/pay summary.
+"""Email an hours/pay summary with a full database backup attached.
 
-Run by a systemd timer (see deploy/timekeeper-weekly.timer). By default it
-reports the previous full week (Mon-Sun). Pass `--this-week` to report the
-current week instead (handy for a test send).
+Run daily by a systemd timer (see deploy/timekeeper-daily.timer), which passes
+`--this-week` so each morning's email reports this week's hours so far (a fresh
+DB backup rides along, so backups are daily). With no flag it reports the
+previous full week (Mon-Sun).
 
 SMTP settings are read from environment variables (see deploy/mail.env):
   MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASSWORD, MAIL_TO, MAIL_FROM
@@ -74,7 +75,7 @@ def build(week_rows, alltime_by_id):
 
 def render_text(start, end, rows, t):
     lines = [
-        "TimeKeeper — Weekly Summary",
+        "TimeKeeper — Daily Summary",
         f"Week of {start:%b %d} – {end:%b %d, %Y}",
         "(Hours and Earned are for this week; Paid, Owed and Tips are running totals.)",
         "",
@@ -106,7 +107,7 @@ def render_html(start, end, rows, t):
     )
     return f"""\
 <div style="font-family:Arial,sans-serif;color:#0f172a">
-  <h2 style="margin:0 0 4px">TimeKeeper — Weekly Summary</h2>
+  <h2 style="margin:0 0 4px">TimeKeeper — Daily Summary</h2>
   <p style="margin:0 0 4px;color:#475569">Week of {start:%b %d} – {end:%b %d, %Y}</p>
   <p style="margin:0 0 16px;color:#94a3b8;font-size:13px">Hours and Earned are for this week; Paid and Owed are running totals.</p>
   <table style="border-collapse:collapse;min-width:600px">
