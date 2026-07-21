@@ -1,64 +1,61 @@
-# 3.5" touchscreen (LCD) setup
+# 3.5" touchscreen (LCD) setup — confirmed procedure
 
-The kiosk runs on a 3.5" SPI touchscreen wired to the Pi's GPIO header. Unlike
-HDMI, an SPI screen needs a **model-specific driver** before it shows anything.
-`deploy/setup.sh` does everything *except* this (it can't guess the panel), so
-run this once after a rebuild.
+The kiosk runs on a **goodtft-style 3.5" SPI touchscreen** (ILI9486 display via
+the `tft35a` overlay, XPT2046 resistive touch). An SPI screen needs a driver
+before it shows anything, and `deploy/setup.sh` can't do it (it reboots and
+can't guess the panel), so run this once after a rebuild.
 
-> ⚠️ The wrong driver can leave the screen blank or stop the Pi booting. Identify
-> the panel first, and know the recovery path (below) before you start. SSH keeps
-> working regardless, so a bad display config is always fixable remotely.
+> ⚠️ SSH keeps working throughout, so a bad display config is always fixable
+> remotely. Recovery notes at the bottom.
 
-## 1. Identify the panel
-Check the board's silkscreen / the seller's listing. The common families:
+## The exact steps that work on this Pi
 
-| Panel | Driver repo | Install command |
-|---|---|---|
-| Generic red "MHS-3.5" / XPT2046" (goodtft) | `github.com/goodtft/LCD-show` | `sudo ./MHS35-show` (or `sudo ./LCD35-show`) |
-| Waveshare 3.5" (A/B/C) | `github.com/waveshare/LCD-show` | `sudo ./LCD35-show` |
-| Adafruit PiTFT 3.5" | Adafruit installer | see Adafruit's PiTFT guide |
-
-The stock overlays already on this Pi (`ls /boot/overlays | grep -Ei 'tft|piscreen'`)
-include `piscreen`, `pitft35-resistive` — some panels work with just a
-`dtoverlay=` line instead of a vendor script.
-
-## 2. Install the driver
-Example for a goodtft-style board (adjust repo/script to your panel). The `90`
-rotates to landscape:
 ```bash
+# 1. Install the goodtft driver (this is the one that works here)
 cd ~
-git clone https://github.com/goodtft/LCD-show.git
+git clone --depth 1 https://github.com/goodtft/LCD-show.git
 chmod -R 755 LCD-show
 cd LCD-show
-sudo ./MHS35-show 90       # or ./LCD35-show 90 — matches your panel
+sudo ./LCD35-show 180        # 180 = landscape, oriented for how OUR screen is mounted
+# ^ this rewrites /boot/config.txt, flips the touch axes to match, and REBOOTS
 ```
-The script rewrites `/boot/config.txt` and **reboots**.
 
-## 3. Known gotcha on Bullseye — the KMS driver
-This Pi's `config.txt` uses `dtoverlay=vc4-kms-v3d`. Most SPI LCD drivers need the
-**older FKMS** driver instead, or they conflict (HDMI works, LCD stays black).
-If the LCD is black after the driver install, edit `/boot/config.txt`:
+**Rotation reference** (the base overlay is `rotate=90`; the arg rotates from there):
+
+| `LCD35-show` arg | Result | config it writes |
+|---|---|---|
+| `0`   | landscape | `tft35a:rotate=90`, `hdmi_cvt 480 320` |
+| `90`  | portrait | `tft35a:rotate=180`, `hdmi_cvt 320 480` |
+| **`180`** | **landscape, flipped — use this** | `tft35a:rotate=270`, `hdmi_cvt 480 320` |
+| `270` | portrait, flipped | `tft35a:rotate=0`, `hdmi_cvt 320 480` |
+
+```bash
+# 2. IMPORTANT: the goodtft script RESETS boot to console (multi-user.target)
+#    every time it runs. Re-enable the graphical kiosk afterward:
+sudo systemctl set-default graphical.target
+sudo mkdir -p /etc/lightdm/lightdm.conf.d
+printf '[Seat:*]\nautologin-user=ayi102\nautologin-user-timeout=0\n' \
+  | sudo tee /etc/lightdm/lightdm.conf.d/01-timekeeper-autologin.conf
+sudo reboot
 ```
-# change:
-dtoverlay=vc4-kms-v3d
-# to:
-dtoverlay=vc4-fkms-v3d
-```
-(The vendor scripts usually do this for you; verify it if the screen is blank.)
 
-## 4. Rotation & touch calibration
-- Rotation: re-run the vendor script with a different angle (`0/90/180/270`).
-- If touch is offset or mirrored, install `xinput-calibrator` and follow the
-  vendor repo's calibration notes (they ship a matching `99-calibration.conf`).
+After the reboot it boots straight into the full-screen Chromium kiosk, landscape,
+mirrored to the LCD by `fbcp` (which the goodtft script installs and autostarts).
 
-## 5. The kiosk itself
-Already wired up by `deploy/setup.sh`: desktop **autologin** is on and
-`~/.config/lxsession/LXDE-pi/autostart` launches `deploy/kiosk.sh` (Chromium
-full-screen at `http://localhost/`). Once the panel displays, the kiosk appears
-on it automatically at the next boot — no extra step.
+## Gotchas we hit (so you don't rediscover them)
+- **goodtft resets boot to console.** Step 2 is mandatory *after* the driver, or
+  the Pi boots to a terminal on the LCD instead of the kiosk.
+- **Don't use `raspi-config` for autologin here** — `do_boot_behaviour` throws
+  `Illegal number: W1` on this image and silently doesn't apply. Set the target +
+  lightdm autologin directly (step 2).
+- **Rotation is `180`, not `90`** — `90` gives portrait on this panel.
+- **`vc4-kms-v3d`:** the goodtft/fbcp path works alongside it here. If a future
+  driver leaves the LCD black, switch `dtoverlay=vc4-kms-v3d` → `vc4-fkms-v3d` in
+  `/boot/config.txt`.
 
-## 6. If it breaks the boot / screen
+## If it breaks the boot or the screen
 - SSH still works — you're never locked out.
-- The vendor scripts back up config to `/boot/config.txt.bak`. Restore with the
-  repo's `sudo ./LCD-hdmi` (reverts to HDMI), or restore `config.txt` by popping
-  the SD into another computer (the boot partition is FAT, readable anywhere).
+- goodtft backs up config to `/boot/config.txt.bak`; we also saved
+  `/boot/config.txt.pre-lcd.bak`. Revert to HDMI with `sudo ~/LCD-show/LCD-hdmi`,
+  or restore `config.txt` by popping the SD into any computer (boot partition is
+  FAT, readable anywhere).

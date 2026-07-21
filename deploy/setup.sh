@@ -66,15 +66,21 @@ if [ ! -f "$SUDOERS" ]; then
   echo "  installed $SUDOERS"
 fi
 
-echo "→ Kiosk on boot (desktop autologin + Chromium autostart)"
-sudo raspi-config nonint do_boot_behaviour B4 \
-  && echo "  desktop autologin enabled" \
-  || echo "  (couldn't set autologin — enable 'Desktop Autologin' in raspi-config)"
+echo "→ Kiosk on boot (graphical target + lightdm autologin + Chromium autostart)"
+# raspi-config's do_boot_behaviour is unreliable on this image (throws "W1"
+# errors and doesn't stick), so set the graphical target + autologin directly.
+sudo systemctl set-default graphical.target
+sudo mkdir -p /etc/lightdm/lightdm.conf.d
+printf '[Seat:*]\nautologin-user=%s\nautologin-user-timeout=0\n' "$USER" \
+  | sudo tee /etc/lightdm/lightdm.conf.d/01-timekeeper-autologin.conf >/dev/null
+echo "  graphical autologin as $USER configured"
 AUTOSTART="$HOME/.config/lxsession/LXDE-pi/autostart"
 mkdir -p "$(dirname "$AUTOSTART")"
 cp deploy/lxde-autostart "$AUTOSTART"
 echo "  autostart installed at $AUTOSTART"
-echo "  NOTE: the 3.5\" SPI touchscreen needs its own driver — see deploy/lcd-setup.md"
+echo "  NOTE: the 3.5\" SPI touchscreen needs its own driver — see deploy/lcd-setup.md."
+echo "        Its installer RESETS boot to console, so re-apply the two commands"
+echo "        above (set-default graphical + autologin) after installing it."
 
 echo
 echo "✓ Setup complete. Final steps:"
