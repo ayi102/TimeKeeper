@@ -4,15 +4,18 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import com.ayi102.timekeeper.core.Shift
 
 /** A worker shown on the kiosk. */
 data class Emp(val id: Long, val name: String, val clockedIn: Boolean)
 
+/** An open (not-yet-clocked-out) time entry. */
+data class OpenEntry(val id: Long, val clockIn: String)
+
 /**
- * Built-in SQLite storage (no Room / no annotation processors — nothing
- * version-sensitive to break on this toolchain). Schema mirrors the Python
- * app: clock_out NULL means still clocked in; actual_in/out hold the raw taps;
- * a weekday may have several schedule rows; tips are separate from wages.
+ * Built-in SQLite storage (no Room / no annotation processors). Schema mirrors
+ * the Python app: clock_out NULL means still clocked in; actual_in/out hold the
+ * raw taps; a weekday may have several schedule rows; tips are separate.
  */
 class Db(context: Context) : SQLiteOpenHelper(context, "timekeeper.db", null, 1) {
 
@@ -79,11 +82,10 @@ class Db(context: Context) : SQLiteOpenHelper(context, "timekeeper.db", null, 1)
         val kay = emp("Kay", 18.0)
         val louncia = emp("Louncia", 18.0)
         val stacy = emp("Stacy", 20.0)
-        // Mon–Fri day shift for Stacy; evenings for Kay; overnight for Louncia.
         for (wd in 0..4) {
             shift(stacy, wd, "07:00", "18:00")
-            shift(kay, wd, "18:00", "00:00")       // ends at midnight
-            shift(louncia, wd, "00:00", "07:00")   // early morning
+            shift(kay, wd, "18:00", "00:00")
+            shift(louncia, wd, "00:00", "07:00")
         }
     }
 
@@ -97,10 +99,41 @@ class Db(context: Context) : SQLiteOpenHelper(context, "timekeeper.db", null, 1)
                  FROM employees e WHERE e.active = 1
                  ORDER BY e.name COLLATE NOCASE""", null
         ).use { c ->
-            while (c.moveToNext()) {
-                out.add(Emp(c.getLong(0), c.getString(1), c.getInt(2) == 1))
-            }
+            while (c.moveToNext()) out.add(Emp(c.getLong(0), c.getString(1), c.getInt(2) == 1))
         }
         return out
+    }
+
+    fun name(empId: Long): String? =
+        readableDatabase.rawQuery(
+            "SELECT name FROM employees WHERE id = ? AND active = 1", arrayOf(empId.toString())
+        ).use { if (it.moveToFirst()) it.getString(0) else null }
+
+    fun openEntry(empId: Long): OpenEntry? =
+        readableDatabase.rawQuery(
+            "SELECT id, clock_in FROM time_entries WHERE employee_id = ? AND clock_out IS NULL LIMIT 1",
+            arrayOf(empId.toString())
+        ).use { if (it.moveToFirst()) OpenEntry(it.getLong(0), it.getString(1)) else null }
+
+    /** Shifts for a worker on a given weekday (0=Mon..6=Sun), earliest first. */
+    fun schedulesFor(empId: Long, weekday: Int): List<Shift> {
+        val out = ArrayList<Shift>()
+        readableDatabase.rawQuery(
+            """SELECT start_time, end_time FROM schedules
+                 WHERE employee_id = ? AND weekday = ? ORDER BY start_time""",
+            arrayOf(empId.toString(), weekday.toString())
+        ).use { c -> while (c.moveToNext()) out.add(Shift(c.getString(0), c.getString(1))) }
+        return out
+    }
+
+    fun insertClockIn(empId: Long, clockIn: String, actualIn: String): Long =
+        writableDatabase.insert("time_entries", null, ContentValues().apply {
+            put("employee_id", empId); put("clock_in", clockIn); put("actual_in", actualIn)
+        })
+
+    fun closeEntry(id: Long, clockOut: String, actualOut: String) {
+        writableDatabase.update("time_entries", ContentValues().apply {
+            put("clock_out", clockOut); put("actual_out", actualOut)
+        }, "id = ?", arrayOf(id.toString()))
     }
 }

@@ -42,6 +42,23 @@
     .namecard.is-out { border-color:var(--panel-2); }
     .empty { text-align:center; color:var(--muted); font-size:1.1rem; margin-top:2rem; }
     .footer { text-align:center; color:var(--muted); font-size:.8rem; padding:.5rem; }
+    /* result overlay */
+    .overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,.6); display:none;
+      align-items:center; justify-content:center; z-index:50;
+    }
+    .overlay.show { display:flex; }
+    .sheet {
+      background:var(--panel); border-radius:24px; padding:2.5rem 2rem;
+      width:min(90vw,460px); text-align:center;
+    }
+    .sheet .mark {
+      font-size:3.5rem; width:96px; height:96px; line-height:96px;
+      border-radius:50%; margin:0 auto 1rem;
+    }
+    .sheet.ok .mark { color:var(--green); background:rgba(34,197,94,.15); }
+    .sheet.err .mark { color:#fca5a5; background:rgba(239,68,68,.15); }
+    .sheet .msg { font-size:1.35rem; font-weight:600; }
   </style>
 </head>
 <body>
@@ -59,7 +76,14 @@
     <p class="empty" id="empty" hidden>No workers yet.</p>
   </main>
 
-  <div class="footer">Phase 1 — data from the on-device database. Runs entirely on the tablet.</div>
+  <div class="overlay" id="overlay">
+    <div class="sheet" id="sheet">
+      <div class="mark" id="mark"></div>
+      <div class="msg" id="msg"></div>
+    </div>
+  </div>
+
+  <div class="footer">Phase 1 — live clock in/out, on-device. Runs entirely on the tablet.</div>
 
   <script>
     function tick() {
@@ -73,7 +97,6 @@
     }
     tick(); setInterval(tick, 1000);
 
-    // Called by the app (MainActivity) with the workers from the database.
     function renderWorkers(list) {
       var grid = document.getElementById("grid");
       grid.innerHTML = "";
@@ -81,32 +104,50 @@
       list.forEach(function (w) {
         var card = document.createElement("div");
         card.className = "namecard " + (w.in ? "is-in" : "is-out");
-        card.innerHTML =
-          '<div class="namecard-name"></div><div class="namecard-status"></div>';
+        card.innerHTML = '<div class="namecard-name"></div><div class="namecard-status"></div>';
         card.querySelector(".namecard-name").textContent = w.name;
         card.querySelector(".namecard-status").textContent = w.in ? "In" : "Out";
-        // Interim local toggle so touch is demonstrable; real clock in/out
-        // (with schedule rules) comes when the in-app server is wired up.
-        card.addEventListener("click", function () {
-          var inNow = card.classList.toggle("is-in");
-          card.classList.toggle("is-out", !inNow);
-          card.querySelector(".namecard-status").textContent = inNow ? "In" : "Out";
-        });
+        card.addEventListener("click", function () { clock(w.id); });
         grid.appendChild(card);
       });
     }
 
-    // Pull the workers from the in-app server.
     function loadWorkers() {
       fetch("/api/workers")
         .then(function (r) { return r.json(); })
         .then(renderWorkers)
         .catch(function () {
           var em = document.getElementById("empty");
-          em.hidden = false;
-          em.textContent = "Could not reach the server.";
+          em.hidden = false; em.textContent = "Could not reach the server.";
         });
     }
+
+    function clock(id) {
+      fetch("/api/clock?id=" + id, { method: "POST" })
+        .then(function (r) { return r.json(); })
+        .then(showResult)
+        .catch(function () { showResult({ ok:false, message:"Could not reach the server." }); });
+    }
+
+    function showResult(res) {
+      var sheet = document.getElementById("sheet");
+      if (res.ok) {
+        sheet.className = "sheet ok";
+        document.getElementById("mark").textContent = "✓";
+        document.getElementById("msg").textContent =
+          res.name + " — clocked " + res.action + " at " + res.time;
+      } else {
+        sheet.className = "sheet err";
+        document.getElementById("mark").textContent = "!";
+        document.getElementById("msg").textContent = res.message || "Not allowed.";
+      }
+      document.getElementById("overlay").classList.add("show");
+      setTimeout(function () {
+        document.getElementById("overlay").classList.remove("show");
+        loadWorkers();
+      }, 2500);
+    }
+
     loadWorkers();
   </script>
 </body>
