@@ -95,6 +95,19 @@
         grid.appendChild(card);
       });
     }
+
+    // Pull the workers from the in-app server.
+    function loadWorkers() {
+      fetch("/api/workers")
+        .then(function (r) { return r.json(); })
+        .then(renderWorkers)
+        .catch(function () {
+          var em = document.getElementById("empty");
+          em.hidden = false;
+          em.textContent = "Could not reach the server.";
+        });
+    }
+    loadWorkers();
   </script>
 </body>
 </html>
