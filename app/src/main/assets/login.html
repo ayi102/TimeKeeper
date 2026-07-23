@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TimeKeeper · Admin login</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#1e293b; --panel-2:#334155; --text:#f1f5f9; --muted:#94a3b8; --blue:#3b82f6; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; height:100%; }
+    body {
+      font-family:-apple-system,"Roboto",sans-serif; background:var(--bg); color:var(--text);
+      display:flex; align-items:center; justify-content:center; min-height:100vh;
+    }
+    .card { background:var(--panel); border-radius:16px; padding:2rem; width:min(90vw,340px); text-align:center; }
+    h1 { margin:0 0 .25rem; font-size:1.3rem; }
+    .byline { color:var(--muted); font-size:.85rem; margin-bottom:1.25rem; }
+    input {
+      width:100%; background:var(--bg); border:1px solid var(--panel-2); color:var(--text);
+      padding:.75rem; border-radius:10px; font-size:1.4rem; text-align:center; margin-bottom:1rem;
+    }
+    button {
+      width:100%; border:none; border-radius:10px; background:var(--blue); color:#fff;
+      padding:.8rem; font-size:1rem; font-weight:600; cursor:pointer;
+    }
+    .err { color:#fca5a5; margin-top:.75rem; min-height:1.2em; }
+    a { color:var(--muted); font-size:.85rem; display:inline-block; margin-top:1rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Admin</h1>
+    <div class="byline">TimeKeeper by Ali Ismail</div>
+    <input id="pin" type="password" inputmode="numeric" placeholder="PIN" autofocus>
+    <button id="go">Enter</button>
+    <div class="err" id="err"></div>
+    <a href="/">← Back to kiosk</a>
+  </div>
+  <script>
+    function submit() {
+      var pin = document.getElementById("pin").value;
+      fetch("/admin/login?pin=" + encodeURIComponent(pin), { method: "POST" })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (res.ok) location.href = "/admin";
+          else document.getElementById("err").textContent = "Incorrect PIN.";
+        })
+        .catch(function () { document.getElementById("err").textContent = "Something went wrong."; });
+    }
+    document.getElementById("go").addEventListener("click", submit);
+    document.getElementById("pin").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") submit();
+    });
+  </script>
+</body>
+</html>

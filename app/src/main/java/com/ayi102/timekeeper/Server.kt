@@ -5,11 +5,13 @@ import com.ayi102.timekeeper.core.Times
 import fi.iki.elonen.NanoHTTPD
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.UUID
 
 /**
  * The in-app web server. The tablet's WebView loads the kiosk from here
- * (http://127.0.0.1:8080/); your phone reaches the admin pages over WiFi at
- * http://<tablet-ip>:8080/admin. Bound on all interfaces.
+ * (http://127.0.0.1:8080/); your phone reaches admin over WiFi at
+ * http://<tablet-ip>:8080/admin. Kiosk + clock endpoints are open (workers need
+ * them); /admin and admin APIs require the PIN (cookie set on login).
  */
 class Server(
     private val db: Db,
@@ -17,29 +19,41 @@ class Server(
     val port: Int = 8080,
 ) : NanoHTTPD(port) {
 
+    // TODO: make the PIN configurable from an admin settings screen.
+    private val adminPin = "1234"
+    private val token = UUID.randomUUID().toString()  // fresh per app launch
+
+    private fun authed(s: IHTTPSession): Boolean = s.cookies.read("tk_auth") == token
+
     override fun serve(session: IHTTPSession): Response = try {
         val uri = session.uri
         when {
+            // ----- open (kiosk) -----
             session.method == Method.GET && (uri == "/" || uri == "/index.html") ->
                 html(asset("kiosk.html"))
-
-            session.method == Method.GET && uri == "/admin" ->
-                html(asset("admin.html"))
-
             session.method == Method.GET && uri == "/api/workers" ->
                 json(workersJson())
-
-            session.method == Method.GET && uri == "/api/summary" ->
-                json(summaryJson())
-
             session.method == Method.GET && uri == "/api/info" ->
                 json(JSONObject().put("ip", Net.lanIp()).put("port", port).toString())
-
             session.method == Method.POST && uri == "/api/clock" -> {
                 val id = session.parameters["id"]?.firstOrNull()?.toLongOrNull()
                 if (id == null) newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, "missing id")
                 else json(resultJson(Clock.toggle(db, id)))
             }
+
+            // ----- login -----
+            session.method == Method.POST && uri == "/admin/login" -> {
+                val ok = session.parameters["pin"]?.firstOrNull() == adminPin
+                if (ok) session.cookies.set("tk_auth", token, 30)
+                json(JSONObject().put("ok", ok).toString())
+            }
+
+            // ----- admin (PIN required) -----
+            session.method == Method.GET && uri == "/admin" ->
+                html(asset(if (authed(session)) "admin.html" else "login.html"))
+            session.method == Method.GET && uri == "/api/summary" ->
+                if (authed(session)) json(summaryJson())
+                else newFixedLengthResponse(Response.Status.UNAUTHORIZED, MIME_PLAINTEXT, "auth required")
 
             else -> newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not found")
         }
