@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>TimeKeeper</title>
+  <style>
+    :root {
+      --bg:#0f172a; --panel:#1e293b; --panel-2:#334155; --text:#f1f5f9;
+      --muted:#94a3b8; --green:#22c55e;
+    }
+    * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html,body { margin:0; height:100%; }
+    body {
+      font-family:-apple-system,"Roboto",sans-serif; background:var(--bg);
+      color:var(--text); user-select:none; display:flex; flex-direction:column;
+      height:100vh; overflow:hidden;
+    }
+    .topbar {
+      display:flex; align-items:center; gap:1rem; padding:1rem 1.5rem;
+      background:var(--panel); border-bottom:1px solid var(--panel-2);
+    }
+    .brand { font-weight:700; font-size:1.5rem; letter-spacing:.3px; }
+    .topright { margin-left:auto; text-align:right; line-height:1.2; }
+    .clock { font-size:1.6rem; font-weight:600; font-variant-numeric:tabular-nums; }
+    .date { color:var(--muted); font-size:.9rem; }
+    main { flex:1; padding:1.5rem; overflow-y:auto; }
+    .prompt { text-align:center; font-size:1.6rem; font-weight:600; margin:.25rem 0 1.5rem; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:1.25rem; }
+    .namecard {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:.6rem; min-height:150px; border-radius:16px; background:var(--panel);
+      padding:1.25rem; border:2px solid transparent; cursor:pointer;
+      transition:transform .08s ease;
+    }
+    .namecard:active { transform:scale(.97); }
+    .namecard-name { font-size:1.6rem; font-weight:700; text-align:center; }
+    .namecard-status { font-size:1rem; color:var(--muted); }
+    .namecard.is-in { border-color:var(--green); }
+    .namecard.is-in .namecard-status { color:var(--green); }
+    .namecard.is-out { border-color:var(--panel-2); }
+    .footer { text-align:center; color:var(--muted); font-size:.8rem; padding:.5rem; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <span class="brand">TimeKeeper</span>
+    <div class="topright">
+      <div class="clock" id="clock">--:--</div>
+      <div class="date" id="date"></div>
+    </div>
+  </div>
+
+  <main>
+    <p class="prompt">Tap your name to clock in or out</p>
+    <div class="grid" id="grid">
+      <div class="namecard is-out"><div class="namecard-name">Kay</div><div class="namecard-status">Out</div></div>
+      <div class="namecard is-in"><div class="namecard-name">Louncia</div><div class="namecard-status">In</div></div>
+      <div class="namecard is-out"><div class="namecard-name">Stacy</div><div class="namecard-status">Out</div></div>
+    </div>
+  </main>
+
+  <div class="footer">Phase 1 preview — static sample. Runs entirely on the tablet.</div>
+
+  <script>
+    function tick() {
+      var now = new Date();
+      var h = now.getHours(), m = now.getMinutes();
+      var ap = h >= 12 ? "PM" : "AM"; var hr = h % 12 || 12;
+      document.getElementById("clock").textContent =
+        hr + ":" + (m < 10 ? "0" + m : m) + " " + ap;
+      document.getElementById("date").textContent =
+        now.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" });
+    }
+    tick(); setInterval(tick, 1000);
+    // prove touch works: tapping a card flips its status (local only, for now)
+    document.querySelectorAll(".namecard").forEach(function (c) {
+      c.addEventListener("click", function () {
+        var inNow = c.classList.toggle("is-in");
+        c.classList.toggle("is-out", !inNow);
+        c.querySelector(".namecard-status").textContent = inNow ? "In" : "Out";
+      });
+    });
+  </script>
+</body>
+</html>
