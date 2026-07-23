@@ -21,6 +21,7 @@
       background:var(--panel); border-bottom:1px solid var(--panel-2);
     }
     .brand { font-weight:700; font-size:1.5rem; letter-spacing:.3px; }
+    .byline { font-weight:400; color:var(--muted); font-size:.62em; }
     .topright { margin-left:auto; text-align:right; line-height:1.2; }
     .clock { font-size:1.6rem; font-weight:600; font-variant-numeric:tabular-nums; }
     .date { color:var(--muted); font-size:.9rem; }
@@ -39,12 +40,13 @@
     .namecard.is-in { border-color:var(--green); }
     .namecard.is-in .namecard-status { color:var(--green); }
     .namecard.is-out { border-color:var(--panel-2); }
+    .empty { text-align:center; color:var(--muted); font-size:1.1rem; margin-top:2rem; }
     .footer { text-align:center; color:var(--muted); font-size:.8rem; padding:.5rem; }
   </style>
 </head>
 <body>
   <div class="topbar">
-    <span class="brand">TimeKeeper</span>
+    <span class="brand">TimeKeeper <span class="byline">by Ali Ismail</span></span>
     <div class="topright">
       <div class="clock" id="clock">--:--</div>
       <div class="date" id="date"></div>
@@ -53,14 +55,11 @@
 
   <main>
     <p class="prompt">Tap your name to clock in or out</p>
-    <div class="grid" id="grid">
-      <div class="namecard is-out"><div class="namecard-name">Kay</div><div class="namecard-status">Out</div></div>
-      <div class="namecard is-in"><div class="namecard-name">Louncia</div><div class="namecard-status">In</div></div>
-      <div class="namecard is-out"><div class="namecard-name">Stacy</div><div class="namecard-status">Out</div></div>
-    </div>
+    <div class="grid" id="grid"></div>
+    <p class="empty" id="empty" hidden>No workers yet.</p>
   </main>
 
-  <div class="footer">Phase 1 preview — static sample. Runs entirely on the tablet.</div>
+  <div class="footer">Phase 1 — data from the on-device database. Runs entirely on the tablet.</div>
 
   <script>
     function tick() {
@@ -73,14 +72,29 @@
         now.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" });
     }
     tick(); setInterval(tick, 1000);
-    // prove touch works: tapping a card flips its status (local only, for now)
-    document.querySelectorAll(".namecard").forEach(function (c) {
-      c.addEventListener("click", function () {
-        var inNow = c.classList.toggle("is-in");
-        c.classList.toggle("is-out", !inNow);
-        c.querySelector(".namecard-status").textContent = inNow ? "In" : "Out";
+
+    // Called by the app (MainActivity) with the workers from the database.
+    function renderWorkers(list) {
+      var grid = document.getElementById("grid");
+      grid.innerHTML = "";
+      document.getElementById("empty").hidden = list.length > 0;
+      list.forEach(function (w) {
+        var card = document.createElement("div");
+        card.className = "namecard " + (w.in ? "is-in" : "is-out");
+        card.innerHTML =
+          '<div class="namecard-name"></div><div class="namecard-status"></div>';
+        card.querySelector(".namecard-name").textContent = w.name;
+        card.querySelector(".namecard-status").textContent = w.in ? "In" : "Out";
+        // Interim local toggle so touch is demonstrable; real clock in/out
+        // (with schedule rules) comes when the in-app server is wired up.
+        card.addEventListener("click", function () {
+          var inNow = card.classList.toggle("is-in");
+          card.classList.toggle("is-out", !inNow);
+          card.querySelector(".namecard-status").textContent = inNow ? "In" : "Out";
+        });
+        grid.appendChild(card);
       });
-    });
+    }
   </script>
 </body>
 </html>
