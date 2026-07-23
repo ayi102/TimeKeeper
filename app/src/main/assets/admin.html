@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TimeKeeper · Admin</title>
+  <style>
+    :root {
+      --bg:#0f172a; --panel:#1e293b; --panel-2:#334155; --text:#f1f5f9;
+      --muted:#94a3b8; --green:#22c55e;
+    }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-height:100%; }
+    body { font-family:-apple-system,"Roboto",sans-serif; background:var(--bg); color:var(--text); }
+    .bar {
+      display:flex; align-items:center; gap:1rem; padding:1rem 1.25rem;
+      background:var(--panel); border-bottom:1px solid var(--panel-2);
+    }
+    .brand { font-weight:700; font-size:1.2rem; }
+    .byline { font-weight:400; color:var(--muted); font-size:.62em; }
+    main { padding:1rem 1.25rem; }
+    .card { background:var(--panel); border-radius:14px; padding:1rem; }
+    h2 { margin:.2rem 0 1rem; font-size:1.1rem; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { text-align:left; padding:.6rem .5rem; border-bottom:1px solid var(--panel-2); }
+    th { color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.5px; }
+    td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+    tfoot td { font-weight:700; border-top:2px solid var(--panel-2); }
+    .owed { color:#fbbf24; }
+    .muted { color:var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <span class="brand">TimeKeeper <span class="byline">by Ali Ismail</span></span>
+    <span class="muted" style="margin-left:auto">Admin</span>
+  </div>
+  <main>
+    <div class="card">
+      <h2>Employees</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th><th class="num">Hours</th><th class="num">Earned</th>
+            <th class="num">Paid</th><th class="num">Owed</th><th class="num">Tips</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+        <tfoot><tr id="totals"></tr></tfoot>
+      </table>
+      <p class="muted" id="status" style="margin-top:1rem"></p>
+    </div>
+  </main>
+
+  <script>
+    function money(n) { return "$" + Number(n).toFixed(2); }
+    fetch("/api/summary")
+      .then(function (r) { return r.json(); })
+      .then(function (list) {
+        var rows = document.getElementById("rows");
+        var t = { hours:0, pay:0, paid:0, owed:0, tips:0 };
+        list.forEach(function (e) {
+          t.hours += e.hours; t.pay += e.pay; t.paid += e.paid; t.owed += e.owed; t.tips += e.tips;
+          var tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td></td>" +
+            '<td class="num">' + e.hours.toFixed(2) + "</td>" +
+            '<td class="num">' + money(e.pay) + "</td>" +
+            '<td class="num">' + money(e.paid) + "</td>" +
+            '<td class="num owed">' + money(e.owed) + "</td>" +
+            '<td class="num">' + money(e.tips) + "</td>";
+          tr.firstChild.textContent = e.name;
+          rows.appendChild(tr);
+        });
+        document.getElementById("totals").innerHTML =
+          "<td>Total</td>" +
+          '<td class="num">' + t.hours.toFixed(2) + "</td>" +
+          '<td class="num">' + money(t.pay) + "</td>" +
+          '<td class="num">' + money(t.paid) + "</td>" +
+          '<td class="num">' + money(t.owed) + "</td>" +
+          '<td class="num">' + money(t.tips) + "</td>";
+        document.getElementById("status").textContent =
+          list.length + " active worker" + (list.length === 1 ? "" : "s") +
+          ". Editing (add workers, schedules, payouts) comes next.";
+      })
+      .catch(function (e) {
+        document.getElementById("status").textContent = "Could not load summary: " + e;
+      });
+  </script>
+</body>
+</html>

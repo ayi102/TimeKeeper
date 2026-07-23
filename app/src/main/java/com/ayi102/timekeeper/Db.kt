@@ -4,13 +4,23 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import com.ayi102.timekeeper.core.Money
 import com.ayi102.timekeeper.core.Shift
+import com.ayi102.timekeeper.core.Times
+import java.time.Duration
+import java.time.LocalDateTime
 
 /** A worker shown on the kiosk. */
 data class Emp(val id: Long, val name: String, val clockedIn: Boolean)
 
 /** An open (not-yet-clocked-out) time entry. */
 data class OpenEntry(val id: Long, val clockIn: String)
+
+/** Per-worker rollup for the admin summary. */
+data class Summary(
+    val name: String, val hours: Double, val pay: Double,
+    val paid: Double, val owed: Double, val owedDue: Double, val tips: Double,
+)
 
 /**
  * Built-in SQLite storage (no Room / no annotation processors). Schema mirrors
@@ -102,6 +112,41 @@ class Db(context: Context) : SQLiteOpenHelper(context, "timekeeper.db", null, 1)
             while (c.moveToNext()) out.add(Emp(c.getLong(0), c.getString(1), c.getInt(2) == 1))
         }
         return out
+    }
+
+    /** Everything the admin summary needs: hours, pay, paid, owed, owed-due, tips. */
+    fun summarize(now: LocalDateTime): List<Summary> {
+        data class E(val id: Long, val name: String, val rate: Double)
+        val emps = ArrayList<E>()
+        readableDatabase.rawQuery(
+            "SELECT id, name, hourly_rate FROM employees WHERE active = 1 ORDER BY name COLLATE NOCASE", null
+        ).use { c -> while (c.moveToNext()) emps.add(E(c.getLong(0), c.getString(1), c.getDouble(2))) }
+
+        val secs = HashMap<Long, Double>()
+        readableDatabase.rawQuery("SELECT employee_id, clock_in, clock_out FROM time_entries", null).use { c ->
+            while (c.moveToNext()) {
+                val id = c.getLong(0)
+                val start = Times.parse(c.getString(1))
+                val end = if (c.isNull(2)) now else Times.parse(c.getString(2))
+                val s = Duration.between(start, end).seconds.toDouble().coerceAtLeast(0.0)
+                secs[id] = (secs[id] ?: 0.0) + s
+            }
+        }
+        val paidM = HashMap<Long, Double>(); val tipM = HashMap<Long, Double>()
+        readableDatabase.rawQuery("SELECT employee_id, amount, tip FROM payments", null).use { c ->
+            while (c.moveToNext()) {
+                val id = c.getLong(0)
+                paidM[id] = (paidM[id] ?: 0.0) + c.getDouble(1)
+                tipM[id] = (tipM[id] ?: 0.0) + c.getDouble(2)
+            }
+        }
+        return emps.map { e ->
+            val hours = Money.hours(secs[e.id] ?: 0.0)
+            val pay = Money.pay(hours, e.rate)
+            val paid = Money.round2(paidM[e.id] ?: 0.0)
+            val owed = Money.round2(pay - paid)
+            Summary(e.name, hours, pay, paid, owed, Money.owedDue(owed), Money.round2(tipM[e.id] ?: 0.0))
+        }
     }
 
     fun name(empId: Long): String? =

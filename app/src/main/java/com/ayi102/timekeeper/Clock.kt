@@ -2,8 +2,8 @@ package com.ayi102.timekeeper
 
 import com.ayi102.timekeeper.core.ClockIn
 import com.ayi102.timekeeper.core.Scheduling
+import com.ayi102.timekeeper.core.Times
 import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 
 /** Outcome of a clock tap, sent back to the kiosk page. */
 data class ClockResult(
@@ -23,18 +23,17 @@ data class ClockResult(
  */
 object Clock {
     private const val GRACE_MIN = 15L
-    private val STORE: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
 
-    fun toggle(db: Db, empId: Long, now: LocalDateTime = LocalDateTime.now().withNano(0)): ClockResult {
+    fun toggle(db: Db, empId: Long, now: LocalDateTime = Times.now()): ClockResult {
         val name = db.name(empId) ?: return ClockResult(false, message = "Unknown worker.")
 
         val open = db.openEntry(empId)
         if (open != null) {
             // ----- CLOCK OUT: cap at the matched shift's scheduled end -----
-            val cin = LocalDateTime.parse(open.clockIn, STORE)
+            val cin = Times.parse(open.clockIn)
             val shift = Scheduling.shiftOf(db.schedulesFor(empId, wd(cin)), cin, GRACE_MIN)
             val out = Scheduling.clockOutTime(now, shift?.second, cin)
-            db.closeEntry(open.id, out.format(STORE), now.format(STORE))
+            db.closeEntry(open.id, Times.format(out), Times.format(now))
             return ClockResult(true, "out", name, Scheduling.fmtTime(out))
         }
 
@@ -45,7 +44,7 @@ object Clock {
             is ClockIn.Blocked -> ClockResult(false, name = name, message = r.message)
             is ClockIn.Ok -> {
                 val cin = Scheduling.clockInTime(now, r.start)
-                db.insertClockIn(empId, cin.format(STORE), now.format(STORE))
+                db.insertClockIn(empId, Times.format(cin), Times.format(now))
                 ClockResult(true, "in", name, Scheduling.fmtTime(cin))
             }
         }

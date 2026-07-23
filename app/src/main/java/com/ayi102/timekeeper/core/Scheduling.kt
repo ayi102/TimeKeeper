@@ -22,6 +22,14 @@ sealed class ClockIn {
     data class Blocked(val message: String) : ClockIn()
 }
 
+/** Stored timestamps are Python-compatible local ISO strings ("...T..:..:.."). */
+object Times {
+    val STORE: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
+    fun parse(s: String): LocalDateTime = LocalDateTime.parse(s, STORE)
+    fun format(dt: LocalDateTime): String = dt.format(STORE)
+    fun now(): LocalDateTime = LocalDateTime.now().withNano(0)
+}
+
 object Scheduling {
     private val TIME_LABEL: DateTimeFormatter = DateTimeFormatter.ofPattern("h:mm a")
 

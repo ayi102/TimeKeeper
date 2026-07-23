@@ -83,7 +83,7 @@
     </div>
   </div>
 
-  <div class="footer">Phase 1 — live clock in/out, on-device. Runs entirely on the tablet.</div>
+  <div class="footer" id="footer">Runs entirely on the tablet.</div>
 
   <script>
     function tick() {
@@ -149,6 +149,15 @@
     }
 
     loadWorkers();
+
+    // Show the admin address so you know where to point your phone.
+    fetch("/api/info")
+      .then(function (r) { return r.json(); })
+      .then(function (i) {
+        document.getElementById("footer").textContent =
+          "Admin: http://" + i.ip + ":" + i.port + "/admin";
+      })
+      .catch(function () {});
   </script>
 </body>
 </html>
