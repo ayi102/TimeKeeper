@@ -150,14 +150,17 @@
 
     loadWorkers();
 
-    // Show the admin address so you know where to point your phone.
+    // Show the admin address (for your phone) and make the footer open admin
+    // here in the app too — handy on any network / for testing.
+    var footer = document.getElementById("footer");
+    footer.style.cursor = "pointer";
+    footer.onclick = function () { location.href = "/admin"; };
     fetch("/api/info")
       .then(function (r) { return r.json(); })
       .then(function (i) {
-        document.getElementById("footer").textContent =
-          "Admin: http://" + i.ip + ":" + i.port + "/admin";
+        footer.textContent = "Admin: http://" + i.ip + ":" + i.port + "/admin  ·  tap to open here";
       })
-      .catch(function () {});
+      .catch(function () { footer.textContent = "Tap to open Admin"; });
   </script>
 </body>
 </html>
