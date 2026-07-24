@@ -26,7 +26,7 @@ class MainActivity : AppCompatActivity() {
 
         // Start the in-app server, then point the WebView at it.
         db = Db(this)
-        server = Server(db, assets)
+        server = Server(this, db)
         server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
 
         val web = findViewById<WebView>(R.id.webview)

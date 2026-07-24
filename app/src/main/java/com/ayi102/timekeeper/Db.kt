@@ -39,7 +39,7 @@ data class Finance(
  * the Python app: clock_out NULL means still clocked in; actual_in/out hold the
  * raw taps; a weekday may have several schedule rows; tips are separate.
  */
-class Db(context: Context) : SQLiteOpenHelper(context, "timekeeper.db", null, 1) {
+class Db(private val ctx: Context) : SQLiteOpenHelper(ctx, "timekeeper.db", null, 1) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -88,6 +88,16 @@ class Db(context: Context) : SQLiteOpenHelper(context, "timekeeper.db", null, 1)
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         // Fresh app for now; real migrations arrive with later phases.
+    }
+
+    /** A gzipped, consistent snapshot of the whole database (for the backup email). */
+    fun snapshotGzip(): ByteArray {
+        // Flush any WAL into the main file so a plain copy is complete.
+        writableDatabase.rawQuery("PRAGMA wal_checkpoint(FULL)", null).use { it.moveToFirst() }
+        val raw = ctx.getDatabasePath("timekeeper.db").readBytes()
+        val bos = java.io.ByteArrayOutputStream()
+        java.util.zip.GZIPOutputStream(bos).use { it.write(raw) }
+        return bos.toByteArray()
     }
 
     private fun seed(db: SQLiteDatabase) {

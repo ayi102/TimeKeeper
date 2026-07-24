@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TimeKeeper · Mail & Backup</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#1e293b; --panel-2:#334155; --text:#f1f5f9; --muted:#94a3b8; --blue:#3b82f6; --green:#22c55e; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-height:100%; }
+    body { font-family:-apple-system,"Roboto",sans-serif; background:var(--bg); color:var(--text); }
+    .bar { display:flex; align-items:center; gap:1rem; padding:1rem 1.25rem; background:var(--panel); border-bottom:1px solid var(--panel-2); }
+    .brand { font-weight:700; font-size:1.1rem; }
+    main { padding:1rem 1.25rem; max-width:600px; margin:0 auto; display:flex; flex-direction:column; gap:1.25rem; }
+    .card { background:var(--panel); border-radius:14px; padding:1rem 1.25rem; }
+    h2 { margin:.2rem 0 1rem; font-size:1.1rem; }
+    label { display:block; margin-bottom:.9rem; font-size:.85rem; color:var(--muted); }
+    input { width:100%; margin-top:.3rem; background:var(--bg); border:1px solid var(--panel-2); color:var(--text); padding:.6rem .7rem; border-radius:8px; font-size:1rem; }
+    .row { display:flex; gap:.75rem; }
+    .row .host { flex:1; } .row .port { width:110px; }
+    .btn { border:none; border-radius:8px; cursor:pointer; padding:.65rem 1rem; font-size:.95rem; font-weight:600; background:var(--panel-2); color:var(--text); text-decoration:none; }
+    .btn.primary { background:var(--blue); }
+    .btn.ghost { background:transparent; border:1px solid var(--panel-2); }
+    .hint { color:var(--muted); font-size:.85rem; margin-top:.5rem; }
+    .status { font-size:.9rem; margin-top:.75rem; min-height:1.2em; }
+    .status.ok { color:#86efac; } .status.err { color:#fca5a5; }
+    .actions { display:flex; gap:.75rem; flex-wrap:wrap; align-items:center; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <a href="/admin" class="btn ghost">← Admin</a>
+    <span class="brand">Mail &amp; Backup</span>
+  </div>
+  <main>
+    <div class="card">
+      <h2>Email settings</h2>
+      <div class="row">
+        <label class="host">SMTP host<input type="text" id="host" value="smtp.gmail.com"></label>
+        <label class="port">Port<input type="number" id="port" value="587"></label>
+      </div>
+      <label>Sending Gmail address<input type="text" id="user" placeholder="you@gmail.com"></label>
+      <label>Gmail App Password<input type="password" id="password" placeholder="16-char app password"></label>
+      <label>Send backups to<input type="text" id="to" placeholder="where the daily email goes"></label>
+      <div class="actions">
+        <button class="btn primary" id="save">Save</button>
+      </div>
+      <p class="hint">Use a Google <strong>App Password</strong> (Google Account → Security → 2-Step Verification → App passwords), not your normal password. Leave the password blank to keep the saved one.</p>
+      <div class="status" id="saveStatus"></div>
+    </div>
+
+    <div class="card">
+      <h2>Backup</h2>
+      <p class="hint" style="margin-top:0">Sends a summary email with a full <strong>.db.gz</strong> database backup attached. The daily automatic send comes next; use this to test now.</p>
+      <div class="actions">
+        <button class="btn" id="test">Send backup email now</button>
+      </div>
+      <div class="status" id="testStatus"></div>
+    </div>
+  </main>
+
+  <script>
+    function val(id) { return document.getElementById(id).value; }
+    function setStatus(id, msg, ok) {
+      var el = document.getElementById(id);
+      el.textContent = msg; el.className = "status " + (ok ? "ok" : "err");
+    }
+
+    fetch("/api/settings").then(function (r) { return r.json(); }).then(function (s) {
+      document.getElementById("host").value = s.host || "smtp.gmail.com";
+      document.getElementById("port").value = s.port || 587;
+      document.getElementById("user").value = s.user || "";
+      document.getElementById("to").value = s.to || "";
+      if (s.hasPassword) document.getElementById("password").placeholder = "•••••• (saved — leave blank to keep)";
+    });
+
+    document.getElementById("save").addEventListener("click", function () {
+      var q = "?host=" + encodeURIComponent(val("host")) +
+              "&port=" + encodeURIComponent(val("port")) +
+              "&user=" + encodeURIComponent(val("user")) +
+              "&password=" + encodeURIComponent(val("password")) +
+              "&to=" + encodeURIComponent(val("to"));
+      fetch("/admin/settings" + q, { method: "POST" }).then(function (r) { return r.json(); }).then(function (res) {
+        setStatus("saveStatus", res.ok ? "Saved." : "Could not save.", res.ok);
+        document.getElementById("password").value = "";
+        document.getElementById("password").placeholder = "•••••• (saved — leave blank to keep)";
+      }).catch(function () { setStatus("saveStatus", "Could not save.", false); });
+    });
+
+    document.getElementById("test").addEventListener("click", function () {
+      setStatus("testStatus", "Sending…", true);
+      fetch("/admin/backup/test", { method: "POST" }).then(function (r) { return r.json(); }).then(function (res) {
+        setStatus("testStatus", res.message || (res.ok ? "Sent." : "Failed."), res.ok);
+      }).catch(function () { setStatus("testStatus", "Failed to send.", false); });
+    });
+  </script>
+</body>
+</html>
