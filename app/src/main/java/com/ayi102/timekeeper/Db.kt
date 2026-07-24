@@ -22,6 +22,9 @@ data class Summary(
     val paid: Double, val owed: Double, val owedDue: Double, val tips: Double,
 )
 
+/** A worker as shown on the admin management list. */
+data class EmpAdmin(val id: Long, val name: String, val rate: Double, val active: Boolean)
+
 /**
  * Built-in SQLite storage (no Room / no annotation processors). Schema mirrors
  * the Python app: clock_out NULL means still clocked in; actual_in/out hold the
@@ -112,6 +115,35 @@ class Db(context: Context) : SQLiteOpenHelper(context, "timekeeper.db", null, 1)
             while (c.moveToNext()) out.add(Emp(c.getLong(0), c.getString(1), c.getInt(2) == 1))
         }
         return out
+    }
+
+    /** All workers (active first) for the admin management list. */
+    fun employeesAdmin(): List<EmpAdmin> {
+        val out = ArrayList<EmpAdmin>()
+        readableDatabase.rawQuery(
+            "SELECT id, name, hourly_rate, active FROM employees ORDER BY active DESC, name COLLATE NOCASE", null
+        ).use { c ->
+            while (c.moveToNext())
+                out.add(EmpAdmin(c.getLong(0), c.getString(1), c.getDouble(2), c.getInt(3) == 1))
+        }
+        return out
+    }
+
+    fun addEmployee(name: String, rate: Double): Long =
+        writableDatabase.insert("employees", null, ContentValues().apply {
+            put("name", name); put("hourly_rate", rate)
+        })
+
+    fun updateEmployee(id: Long, name: String, rate: Double) {
+        writableDatabase.update("employees", ContentValues().apply {
+            put("name", name); put("hourly_rate", rate)
+        }, "id = ?", arrayOf(id.toString()))
+    }
+
+    fun setActive(id: Long, active: Boolean) {
+        writableDatabase.update("employees", ContentValues().apply {
+            put("active", if (active) 1 else 0)
+        }, "id = ?", arrayOf(id.toString()))
     }
 
     /** Everything the admin summary needs: hours, pay, paid, owed, owed-due, tips. */

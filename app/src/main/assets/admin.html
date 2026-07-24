@@ -7,19 +7,16 @@
   <style>
     :root {
       --bg:#0f172a; --panel:#1e293b; --panel-2:#334155; --text:#f1f5f9;
-      --muted:#94a3b8; --green:#22c55e;
+      --muted:#94a3b8; --green:#22c55e; --blue:#3b82f6; --red:#ef4444;
     }
     * { box-sizing:border-box; }
     html,body { margin:0; min-height:100%; }
     body { font-family:-apple-system,"Roboto",sans-serif; background:var(--bg); color:var(--text); }
-    .bar {
-      display:flex; align-items:center; gap:1rem; padding:1rem 1.25rem;
-      background:var(--panel); border-bottom:1px solid var(--panel-2);
-    }
+    .bar { display:flex; align-items:center; gap:1rem; padding:1rem 1.25rem; background:var(--panel); border-bottom:1px solid var(--panel-2); }
     .brand { font-weight:700; font-size:1.2rem; }
     .byline { font-weight:400; color:var(--muted); font-size:.62em; }
-    main { padding:1rem 1.25rem; }
-    .card { background:var(--panel); border-radius:14px; padding:1rem; }
+    main { padding:1rem 1.25rem; display:flex; flex-direction:column; gap:1.25rem; max-width:900px; margin:0 auto; }
+    .card { background:var(--panel); border-radius:14px; padding:1rem 1.25rem; }
     h2 { margin:.2rem 0 1rem; font-size:1.1rem; }
     table { width:100%; border-collapse:collapse; }
     th, td { text-align:left; padding:.6rem .5rem; border-bottom:1px solid var(--panel-2); }
@@ -28,65 +25,146 @@
     tfoot td { font-weight:700; border-top:2px solid var(--panel-2); }
     .owed { color:#fbbf24; }
     .muted { color:var(--muted); }
+    tr.inactive { opacity:.5; }
+    .tag { font-size:.7rem; background:var(--panel-2); padding:.15rem .45rem; border-radius:6px; color:var(--muted); }
+    .row-actions { display:flex; gap:.4rem; justify-content:flex-end; }
+    .btn { border:none; border-radius:8px; cursor:pointer; padding:.5rem .8rem; font-size:.85rem; font-weight:600; background:var(--panel-2); color:var(--text); }
+    .btn.primary { background:var(--blue); }
+    .btn.ghost { background:transparent; border:1px solid var(--panel-2); }
+    .btn.danger { background:var(--red); }
+    .form { display:flex; gap:.75rem; align-items:flex-end; flex-wrap:wrap; margin-bottom:1rem; }
+    .form label { display:flex; flex-direction:column; gap:.3rem; font-size:.8rem; color:var(--muted); }
+    .form input { background:var(--bg); border:1px solid var(--panel-2); color:var(--text); padding:.6rem .7rem; border-radius:8px; font-size:1rem; }
+    .form input[type=text] { min-width:180px; }
+    .form input[type=number] { width:110px; }
   </style>
 </head>
 <body>
   <div class="bar">
-    <a href="/" style="color:var(--text);text-decoration:none;border:1px solid var(--panel-2);border-radius:8px;padding:.35rem .7rem">← Kiosk</a>
+    <a href="/" class="btn ghost" style="text-decoration:none">← Kiosk</a>
     <span class="brand">TimeKeeper <span class="byline">by Ali Ismail</span></span>
     <span class="muted" style="margin-left:auto">Admin</span>
   </div>
+
   <main>
     <div class="card">
-      <h2>Employees</h2>
+      <h2 id="empFormTitle">Add Worker</h2>
+      <div class="form">
+        <input type="hidden" id="empId">
+        <label>Name<input type="text" id="empName" placeholder="Worker name"></label>
+        <label>Hourly rate ($)<input type="number" id="empRate" min="0" step="0.01" value="0"></label>
+        <button class="btn primary" onclick="saveEmp()">Save</button>
+        <button class="btn ghost" onclick="clearForm()">Clear</button>
+      </div>
+      <table>
+        <thead><tr><th>Name</th><th class="num">Rate</th><th></th></tr></thead>
+        <tbody id="empRows"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Summary</h2>
       <table>
         <thead>
-          <tr>
-            <th>Name</th><th class="num">Hours</th><th class="num">Earned</th>
-            <th class="num">Paid</th><th class="num">Owed</th><th class="num">Tips</th>
-          </tr>
+          <tr><th>Name</th><th class="num">Hours</th><th class="num">Earned</th>
+              <th class="num">Paid</th><th class="num">Owed</th><th class="num">Tips</th></tr>
         </thead>
-        <tbody id="rows"></tbody>
-        <tfoot><tr id="totals"></tr></tfoot>
+        <tbody id="sumRows"></tbody>
+        <tfoot><tr id="sumTotals"></tr></tfoot>
       </table>
-      <p class="muted" id="status" style="margin-top:1rem"></p>
     </div>
   </main>
 
   <script>
     function money(n) { return "$" + Number(n).toFixed(2); }
-    fetch("/api/summary")
-      .then(function (r) { return r.json(); })
-      .then(function (list) {
-        var rows = document.getElementById("rows");
+
+    function loadEmployees() {
+      fetch("/api/employees").then(function (r) { return r.json(); }).then(function (list) {
+        var rows = document.getElementById("empRows");
+        rows.innerHTML = "";
+        list.forEach(function (e) {
+          var tr = document.createElement("tr");
+          if (!e.active) tr.className = "inactive";
+          var tag = e.active ? "" : ' <span class="tag">inactive</span>';
+          tr.innerHTML =
+            "<td>" + escapeHtml(e.name) + tag + "</td>" +
+            '<td class="num">$' + e.rate.toFixed(2) + "/hr</td>" +
+            '<td><div class="row-actions">' +
+              '<button class="btn">Edit</button>' +
+              '<button class="btn ghost">' + (e.active ? "Deactivate" : "Reactivate") + "</button>" +
+            "</div></td>";
+          var btns = tr.querySelectorAll("button");
+          btns[0].onclick = function () { editEmp(e); };
+          btns[1].onclick = function () { toggleActive(e); };
+          rows.appendChild(tr);
+        });
+      });
+    }
+
+    function editEmp(e) {
+      document.getElementById("empId").value = e.id;
+      document.getElementById("empName").value = e.name;
+      document.getElementById("empRate").value = e.rate;
+      document.getElementById("empFormTitle").textContent = "Edit Worker";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    function clearForm() {
+      document.getElementById("empId").value = "";
+      document.getElementById("empName").value = "";
+      document.getElementById("empRate").value = "0";
+      document.getElementById("empFormTitle").textContent = "Add Worker";
+    }
+    function saveEmp() {
+      var id = document.getElementById("empId").value;
+      var name = document.getElementById("empName").value.trim();
+      var rate = document.getElementById("empRate").value || "0";
+      if (!name) { alert("Name is required."); return; }
+      var q = "?name=" + encodeURIComponent(name) + "&rate=" + encodeURIComponent(rate) + (id ? "&id=" + id : "");
+      fetch("/admin/employee" + q, { method: "POST" }).then(function (r) { return r.json(); }).then(function (res) {
+        if (!res.ok) { alert(res.message || "Could not save."); return; }
+        clearForm(); loadEmployees(); loadSummary();
+      });
+    }
+    function toggleActive(e) {
+      fetch("/admin/employee/active?id=" + e.id + "&active=" + (e.active ? "0" : "1"), { method: "POST" })
+        .then(function () { loadEmployees(); loadSummary(); });
+    }
+
+    function loadSummary() {
+      fetch("/api/summary").then(function (r) { return r.json(); }).then(function (list) {
+        var rows = document.getElementById("sumRows");
+        rows.innerHTML = "";
         var t = { hours:0, pay:0, paid:0, owed:0, tips:0 };
         list.forEach(function (e) {
           t.hours += e.hours; t.pay += e.pay; t.paid += e.paid; t.owed += e.owed; t.tips += e.tips;
           var tr = document.createElement("tr");
           tr.innerHTML =
-            "<td></td>" +
+            "<td>" + escapeHtml(e.name) + "</td>" +
             '<td class="num">' + e.hours.toFixed(2) + "</td>" +
             '<td class="num">' + money(e.pay) + "</td>" +
             '<td class="num">' + money(e.paid) + "</td>" +
             '<td class="num owed">' + money(e.owed) + "</td>" +
             '<td class="num">' + money(e.tips) + "</td>";
-          tr.firstChild.textContent = e.name;
           rows.appendChild(tr);
         });
-        document.getElementById("totals").innerHTML =
+        document.getElementById("sumTotals").innerHTML =
           "<td>Total</td>" +
           '<td class="num">' + t.hours.toFixed(2) + "</td>" +
           '<td class="num">' + money(t.pay) + "</td>" +
           '<td class="num">' + money(t.paid) + "</td>" +
           '<td class="num">' + money(t.owed) + "</td>" +
           '<td class="num">' + money(t.tips) + "</td>";
-        document.getElementById("status").textContent =
-          list.length + " active worker" + (list.length === 1 ? "" : "s") +
-          ". Editing (add workers, schedules, payouts) comes next.";
-      })
-      .catch(function (e) {
-        document.getElementById("status").textContent = "Could not load summary: " + e;
       });
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c];
+      });
+    }
+
+    loadEmployees();
+    loadSummary();
   </script>
 </body>
 </html>

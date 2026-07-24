@@ -52,8 +52,29 @@ class Server(
             session.method == Method.GET && uri == "/admin" ->
                 html(asset(if (authed(session)) "admin.html" else "login.html"))
             session.method == Method.GET && uri == "/api/summary" ->
-                if (authed(session)) json(summaryJson())
-                else newFixedLengthResponse(Response.Status.UNAUTHORIZED, MIME_PLAINTEXT, "auth required")
+                if (authed(session)) json(summaryJson()) else unauthorized()
+
+            session.method == Method.GET && uri == "/api/employees" ->
+                if (authed(session)) json(employeesJson()) else unauthorized()
+
+            session.method == Method.POST && uri == "/admin/employee" -> guard(session) {
+                val p = session.parameters
+                val name = p["name"]?.firstOrNull()?.trim().orEmpty()
+                val rate = p["rate"]?.firstOrNull()?.toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0
+                val id = p["id"]?.firstOrNull()?.toLongOrNull()
+                if (name.isEmpty()) json(JSONObject().put("ok", false).put("message", "Name is required.").toString())
+                else {
+                    if (id != null) db.updateEmployee(id, name, rate) else db.addEmployee(name, rate)
+                    json(JSONObject().put("ok", true).toString())
+                }
+            }
+
+            session.method == Method.POST && uri == "/admin/employee/active" -> guard(session) {
+                val id = session.parameters["id"]?.firstOrNull()?.toLongOrNull()
+                val active = session.parameters["active"]?.firstOrNull() == "1"
+                if (id != null) db.setActive(id, active)
+                json(JSONObject().put("ok", id != null).toString())
+            }
 
             else -> newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not found")
         }
@@ -79,6 +100,23 @@ class Server(
                 JSONObject()
                     .put("name", s.name).put("hours", s.hours).put("pay", s.pay)
                     .put("paid", s.paid).put("owed", s.owedDue).put("tips", s.tips)
+            )
+        }
+        return arr.toString()
+    }
+
+    private fun guard(s: IHTTPSession, block: () -> Response): Response =
+        if (authed(s)) block() else unauthorized()
+
+    private fun unauthorized(): Response =
+        newFixedLengthResponse(Response.Status.UNAUTHORIZED, MIME_PLAINTEXT, "auth required")
+
+    private fun employeesJson(): String {
+        val arr = JSONArray()
+        for (e in db.employeesAdmin()) {
+            arr.put(
+                JSONObject().put("id", e.id).put("name", e.name)
+                    .put("rate", e.rate).put("active", e.active)
             )
         }
         return arr.toString()
