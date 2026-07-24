@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TimeKeeper · Schedule</title>
   <style>
-    :root { --bg:#0f172a; --panel:#1e293b; --panel-2:#334155; --text:#f1f5f9; --muted:#94a3b8; --blue:#3b82f6; --red:#ef4444; }
+    :root { --bg:#0b1020; --panel:#181f3a; --panel-2:#2a3357; --text:#f1f5f9; --muted:#9aa6c4; --blue:#3b82f6; --red:#ef4444; }
     * { box-sizing:border-box; }
     html,body { margin:0; min-height:100%; }
-    body { font-family:-apple-system,"Roboto",sans-serif; background:var(--bg); color:var(--text); }
-    .bar { display:flex; align-items:center; gap:1rem; padding:1rem 1.25rem; background:var(--panel); border-bottom:1px solid var(--panel-2); }
+    body { font-family:-apple-system,"Roboto",sans-serif; background:radial-gradient(900px 520px at 12% -8%,rgba(99,102,241,.30),transparent 60%),radial-gradient(820px 520px at 108% 4%,rgba(168,85,247,.20),transparent 55%),var(--bg); background-attachment:fixed; color:var(--text); }
+    .bar { display:flex; align-items:center; gap:1rem; padding:1rem 1.25rem; background:rgba(24,31,58,.72); backdrop-filter:blur(10px); border-bottom:1px solid rgba(148,163,247,.15); }
     .brand { font-weight:700; font-size:1.1rem; }
     main { padding:1rem 1.25rem; max-width:760px; margin:0 auto; }
-    .card { background:var(--panel); border-radius:14px; padding:1rem 1.25rem; }
+    .card { background:linear-gradient(160deg,rgba(30,38,72,.9),rgba(20,26,54,.9)); border:1px solid rgba(148,163,247,.12); border-radius:16px; padding:1rem 1.25rem; box-shadow:0 10px 26px rgba(0,0,0,.25); }
     .intro { color:var(--muted); font-size:.9rem; margin:.25rem 0 1rem; }
     .day { border-bottom:1px solid var(--panel-2); padding:.9rem 0; }
     .day:first-child { padding-top:0; }
@@ -25,7 +25,7 @@
     .overnight { font-size:.7rem; color:var(--blue); }
     .off { color:var(--muted); margin:.5rem 0 0; }
     .btn { border:none; border-radius:8px; cursor:pointer; padding:.5rem .8rem; font-size:.85rem; font-weight:600; background:var(--panel-2); color:var(--text); text-decoration:none; }
-    .btn.primary { background:var(--blue); }
+    .btn.primary { background:linear-gradient(135deg,#6366f1,#a855f7); box-shadow:0 4px 14px rgba(99,102,241,.35); }
     .btn.ghost { background:transparent; border:1px solid var(--panel-2); }
     .remove { margin-left:auto; }
     .savebar { margin-top:1.25rem; display:flex; align-items:center; gap:1rem; }

@@ -6,56 +6,84 @@
   <title>TimeKeeper</title>
   <style>
     :root {
-      --bg:#0f172a; --panel:#1e293b; --panel-2:#334155; --text:#f1f5f9;
-      --muted:#94a3b8; --green:#22c55e;
+      --bg:#0b1020; --panel:#181f3a; --panel-2:#2a3357; --text:#f1f5f9;
+      --muted:#9aa6c4; --green:#22c55e; --indigo:#6366f1; --violet:#a855f7;
+      --grad:linear-gradient(135deg,#6366f1,#a855f7);
     }
     * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
     html,body { margin:0; height:100%; }
     body {
-      font-family:-apple-system,"Roboto",sans-serif; background:var(--bg);
-      color:var(--text); user-select:none; display:flex; flex-direction:column;
+      font-family:-apple-system,"Roboto",sans-serif; color:var(--text);
+      user-select:none; display:flex; flex-direction:column;
       height:100vh; overflow:hidden;
+      background:
+        radial-gradient(900px 520px at 12% -8%, rgba(99,102,241,.32), transparent 60%),
+        radial-gradient(820px 520px at 108% 4%, rgba(168,85,247,.24), transparent 55%),
+        radial-gradient(700px 500px at 50% 120%, rgba(56,189,248,.12), transparent 60%),
+        var(--bg);
+      background-attachment:fixed;
     }
     .topbar {
-      display:flex; align-items:center; gap:1rem; padding:1rem 1.5rem;
-      background:var(--panel); border-bottom:1px solid var(--panel-2);
+      display:flex; align-items:center; gap:1.1rem; padding:1.5rem 1.75rem;
+      background:rgba(24,31,58,.72); backdrop-filter:blur(10px);
+      border-bottom:1px solid rgba(148,163,247,.15);
     }
-    .brand { font-weight:700; font-size:1.5rem; letter-spacing:.3px; }
-    .byline { font-weight:400; color:var(--muted); font-size:.62em; }
+    .avatar {
+      width:76px; height:76px; border-radius:50%; object-fit:cover; cursor:pointer;
+      border:2px solid rgba(148,163,247,.5); box-shadow:0 4px 14px rgba(99,102,241,.45);
+      transition:transform .08s ease;
+    }
+    .avatar:active { transform:scale(.92); }
+    .brand {
+      font-weight:800; font-size:1.5rem; letter-spacing:.3px;
+      background:linear-gradient(135deg,#818cf8,#c084fc);
+      -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    }
+    .byline { font-weight:400; color:var(--muted); font-size:.62em; -webkit-text-fill-color:var(--muted); }
     .adminbtn {
-      margin-left:auto; background:var(--panel-2); color:var(--text); border:none;
-      border-radius:10px; padding:.6rem 1.1rem; font-size:1rem; font-weight:600; cursor:pointer;
+      margin-left:auto; background:var(--grad); color:#fff; border:none;
+      border-radius:12px; padding:.6rem 1.2rem; font-size:1rem; font-weight:700; cursor:pointer;
+      box-shadow:0 6px 18px rgba(99,102,241,.4);
     }
     .adminbtn:active { transform:scale(.97); }
     .topright { text-align:right; line-height:1.2; }
-    .clock { font-size:1.6rem; font-weight:600; font-variant-numeric:tabular-nums; }
+    .clock { font-size:1.6rem; font-weight:700; font-variant-numeric:tabular-nums; }
     .date { color:var(--muted); font-size:.9rem; }
     main { flex:1; padding:1.5rem; overflow-y:auto; }
-    .prompt { text-align:center; font-size:1.6rem; font-weight:600; margin:.25rem 0 1.5rem; }
+    .prompt { text-align:center; font-size:1.6rem; font-weight:700; margin:.25rem 0 1.5rem; }
     .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:1.25rem; }
     .namecard {
-      display:flex; flex-direction:column; align-items:center; justify-content:center;
-      gap:.6rem; min-height:150px; border-radius:16px; background:var(--panel);
-      padding:1.25rem; border:2px solid transparent; cursor:pointer;
-      transition:transform .08s ease;
+      position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:.6rem; min-height:150px; border-radius:18px;
+      background:linear-gradient(160deg, rgba(42,52,98,.85), rgba(22,29,58,.9));
+      padding:1.25rem; border:1px solid rgba(148,163,247,.18); cursor:pointer;
+      box-shadow:0 10px 24px rgba(0,0,0,.28);
+      transition:transform .08s ease, box-shadow .15s ease, border-color .15s ease;
     }
     .namecard:active { transform:scale(.97); }
-    .namecard-name { font-size:1.6rem; font-weight:700; text-align:center; }
-    .namecard-status { font-size:1rem; color:var(--muted); }
-    .namecard.is-in { border-color:var(--green); }
-    .namecard.is-in .namecard-status { color:var(--green); }
-    .namecard.is-out { border-color:var(--panel-2); }
+    .namecard-name { font-size:1.6rem; font-weight:800; text-align:center; }
+    .namecard-status { font-size:1rem; color:var(--muted); font-weight:600; }
+    .namecard.is-in {
+      border-color:rgba(34,197,94,.6);
+      box-shadow:0 10px 28px rgba(34,197,94,.28);
+      background:linear-gradient(160deg, rgba(22,74,52,.75), rgba(20,40,45,.85));
+    }
+    .namecard.is-in .namecard-status { color:#4ade80; }
+    .namecard.is-out { border-color:rgba(148,163,247,.18); }
     .empty { text-align:center; color:var(--muted); font-size:1.1rem; margin-top:2rem; }
     .footer { text-align:center; color:var(--muted); font-size:.8rem; padding:.5rem; }
     /* result overlay */
     .overlay {
-      position:fixed; inset:0; background:rgba(0,0,0,.6); display:none;
+      position:fixed; inset:0; background:rgba(6,9,20,.72); backdrop-filter:blur(4px); display:none;
       align-items:center; justify-content:center; z-index:50;
     }
     .overlay.show { display:flex; }
     .sheet {
-      background:var(--panel); border-radius:24px; padding:2.5rem 2rem;
+      background:linear-gradient(160deg, rgba(30,38,72,.98), rgba(18,24,50,.98));
+      border:1px solid rgba(148,163,247,.18);
+      border-radius:24px; padding:2.5rem 2rem;
       width:min(90vw,460px); text-align:center;
+      box-shadow:0 24px 60px rgba(0,0,0,.5);
     }
     .sheet .mark {
       font-size:3.5rem; width:96px; height:96px; line-height:96px;
@@ -68,6 +96,7 @@
 </head>
 <body>
   <div class="topbar">
+    <img class="avatar" id="avatar" src="/ali_photo.jpg" alt="Ali Ismail">
     <span class="brand">TimeKeeper <span class="byline">by Ali Ismail</span></span>
     <button class="adminbtn" id="adminBtn">Admin</button>
     <div class="topright">
@@ -158,6 +187,11 @@
 
     // The Admin button opens admin here in the app (works while pinned).
     document.getElementById("adminBtn").onclick = function () { location.href = "/admin"; };
+
+    // Tapping Ali's photo plays his voice clip (played natively on the tablet).
+    document.getElementById("avatar").addEventListener("click", function () {
+      fetch("/api/play/ali", { method: "POST" });
+    });
 
     // The footer shows the address to use from your phone — info only, not a button.
     var footer = document.getElementById("footer");

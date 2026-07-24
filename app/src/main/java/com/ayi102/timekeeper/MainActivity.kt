@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit
 class MainActivity : AppCompatActivity() {
     private lateinit var db: Db
     private lateinit var server: Server
+    private lateinit var prayer: PrayerScheduler
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,6 +41,9 @@ class MainActivity : AppCompatActivity() {
 
         scheduleDailyBackup()
         scheduleMaintenance()
+
+        prayer = PrayerScheduler(this)
+        prayer.start()
     }
 
     /** Periodic upkeep: auto-clockout of forgotten entries and missed-clock-in alerts. */
@@ -99,6 +103,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        if (::prayer.isInitialized) prayer.stop()
         if (::server.isInitialized) server.stop()
         super.onDestroy()
     }

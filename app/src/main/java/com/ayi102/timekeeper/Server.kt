@@ -42,9 +42,21 @@ class Server(
             get && uri == "/api/workers" -> json(workersJson())
             get && uri == "/api/info" ->
                 json(JSONObject().put("ip", Net.lanIp()).put("port", port).toString())
+            get && uri == "/ali_photo.jpg" -> {
+                val b = context.assets.open("ali_photo.jpg").use { it.readBytes() }
+                newFixedLengthResponse(Response.Status.OK, "image/jpeg", b.inputStream(), b.size.toLong())
+            }
+            post && uri == "/api/play/ali" -> { Sound.play(context, R.raw.ali_ismail); ok() }
             post && uri == "/api/clock" -> {
                 val id = param(session, "id")?.toLongOrNull()
-                if (id == null) bad("missing id") else json(resultJson(Clock.toggle(db, id)))
+                if (id == null) bad("missing id") else {
+                    val r = Clock.toggle(db, id)
+                    if (r.ok) when (r.action) {
+                        "in" -> Sound.play(context, R.raw.clocked_in)
+                        "out" -> Sound.play(context, R.raw.clocked_out)
+                    }
+                    json(resultJson(r))
+                }
             }
 
             // ----- login -----
