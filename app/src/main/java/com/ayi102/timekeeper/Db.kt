@@ -146,6 +146,23 @@ class Db(context: Context) : SQLiteOpenHelper(context, "timekeeper.db", null, 1)
         }, "id = ?", arrayOf(id.toString()))
     }
 
+    /** Permanently remove a worker AND all their entries/payments/schedules. */
+    fun deleteEmployee(id: Long) {
+        val db = writableDatabase
+        val a = arrayOf(id.toString())
+        db.beginTransaction()
+        try {
+            db.delete("time_entries", "employee_id = ?", a)
+            db.delete("payments", "employee_id = ?", a)
+            db.delete("schedules", "employee_id = ?", a)
+            db.delete("clockin_alerts", "employee_id = ?", a)
+            db.delete("employees", "id = ?", a)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     /** Everything the admin summary needs: hours, pay, paid, owed, owed-due, tips. */
     fun summarize(now: LocalDateTime): List<Summary> {
         data class E(val id: Long, val name: String, val rate: Double)

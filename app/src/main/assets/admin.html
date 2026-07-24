@@ -92,10 +92,12 @@
             '<td><div class="row-actions">' +
               '<button class="btn">Edit</button>' +
               '<button class="btn ghost">' + (e.active ? "Deactivate" : "Reactivate") + "</button>" +
+              '<button class="btn danger">Delete</button>' +
             "</div></td>";
           var btns = tr.querySelectorAll("button");
           btns[0].onclick = function () { editEmp(e); };
           btns[1].onclick = function () { toggleActive(e); };
+          btns[2].onclick = function () { deleteEmp(e); };
           rows.appendChild(tr);
         });
       });
@@ -128,6 +130,12 @@
     function toggleActive(e) {
       fetch("/admin/employee/active?id=" + e.id + "&active=" + (e.active ? "0" : "1"), { method: "POST" })
         .then(function () { loadEmployees(); loadSummary(); });
+    }
+    function deleteEmp(e) {
+      if (!confirm("Permanently delete " + e.name + " and ALL their time entries and payments?\nThis cannot be undone. (To just remove them from the kiosk, use Deactivate instead.)")) return;
+      fetch("/admin/employee/delete?id=" + e.id, { method: "POST" })
+        .then(function () { loadEmployees(); loadSummary(); })
+        .catch(function () { alert("Could not delete — try logging in again."); });
     }
 
     function loadSummary() {

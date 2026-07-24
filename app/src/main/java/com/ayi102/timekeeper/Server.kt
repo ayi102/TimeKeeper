@@ -78,6 +78,12 @@ class Server(
                 json(JSONObject().put("ok", id != null).toString())
             }
 
+            session.method == Method.POST && uri == "/admin/employee/delete" -> guard(session) {
+                val id = session.parameters["id"]?.firstOrNull()?.toLongOrNull()
+                if (id != null) db.deleteEmployee(id)
+                json(JSONObject().put("ok", id != null).toString())
+            }
+
             else -> newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not found")
         }
     } catch (e: Exception) {
