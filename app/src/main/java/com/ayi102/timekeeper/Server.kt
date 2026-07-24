@@ -22,8 +22,8 @@ class Server(
     val port: Int = 8080,
 ) : NanoHTTPD(port) {
 
-    private val adminPin = "1234"                  // TODO: make configurable
     private val token = UUID.randomUUID().toString()
+    private fun adminPin(): String = Settings(context).pin()
 
     init {
         // Keep multipart uploads (restore) in the app cache; java.io.tmpdir may not be writable.
@@ -49,7 +49,7 @@ class Server(
 
             // ----- login -----
             post && uri == "/admin/login" -> {
-                val ok = param(session, "pin") == adminPin
+                val ok = param(session, "pin") == adminPin()
                 val resp = json(JSONObject().put("ok", ok).toString())
                 if (ok) resp.addHeader("Set-Cookie", "tk_auth=$token; Path=/; Max-Age=2592000")
                 resp
@@ -198,6 +198,15 @@ class Server(
                     json(JSONObject().put("ok", true).put("message", Backup.run(context, db)).toString())
                 } catch (e: Exception) {
                     json(JSONObject().put("ok", false).put("message", (e.message ?: "Send failed.")).toString())
+                }
+            }
+            post && uri == "/admin/pin" -> guard(session) {
+                val current = param(session, "current")
+                val next = param(session, "new").orEmpty()
+                when {
+                    current != adminPin() -> json(err("Current PIN is incorrect."))
+                    next.length < 4 || !next.all { it.isDigit() } -> json(err("New PIN must be at least 4 digits."))
+                    else -> { Settings(context).savePin(next); ok() }
                 }
             }
             post && uri == "/admin/restore" -> guard(session) {

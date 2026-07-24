@@ -14,6 +14,10 @@ class Settings(context: Context) {
 
     fun configured(): Boolean = user().isNotBlank() && password().isNotBlank() && to().isNotBlank()
 
+    /** Admin PIN (default 1234 until changed). */
+    fun pin(): String = p.getString("pin", "1234") ?: "1234"
+    fun savePin(newPin: String) { p.edit().putString("pin", newPin).apply() }
+
     fun save(host: String, port: Int, user: String, password: String, to: String) {
         p.edit()
             .putString("host", host)

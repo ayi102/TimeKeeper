@@ -52,6 +52,18 @@
     </div>
 
     <div class="card">
+      <h2>Admin PIN</h2>
+      <p class="hint" style="margin-top:0">The PIN for this page and worker management. Default is <strong>1234</strong> — change it.</p>
+      <label>Current PIN<input type="password" inputmode="numeric" id="pinCurrent" placeholder="current PIN"></label>
+      <label>New PIN<input type="password" inputmode="numeric" id="pinNew" placeholder="at least 4 digits"></label>
+      <label>Confirm new PIN<input type="password" inputmode="numeric" id="pinConfirm" placeholder="re-enter new PIN"></label>
+      <div class="actions">
+        <button class="btn primary" id="savePin">Update PIN</button>
+      </div>
+      <div class="status" id="pinStatus"></div>
+    </div>
+
+    <div class="card">
       <h2>Backup</h2>
       <p class="hint" style="margin-top:0">Sends a summary email with a full <strong>.db.gz</strong> database backup attached. The daily automatic send comes next; use this to test now.</p>
       <div class="actions">
@@ -107,6 +119,17 @@
         document.getElementById("password").value = "";
         document.getElementById("password").placeholder = "•••••• (saved — leave blank to keep)";
       }).catch(function () { setStatus("saveStatus", "Could not save.", false); });
+    });
+
+    document.getElementById("savePin").addEventListener("click", function () {
+      var cur = val("pinCurrent"), n1 = val("pinNew"), n2 = val("pinConfirm");
+      if (n1.length < 4) { setStatus("pinStatus", "New PIN must be at least 4 digits.", false); return; }
+      if (n1 !== n2) { setStatus("pinStatus", "New PINs don't match.", false); return; }
+      fetch("/admin/pin?current=" + encodeURIComponent(cur) + "&new=" + encodeURIComponent(n1), { method: "POST" })
+        .then(function (r) { return r.json(); }).then(function (res) {
+          setStatus("pinStatus", res.ok ? "PIN updated." : (res.message || "Could not update."), res.ok);
+          if (res.ok) { document.getElementById("pinCurrent").value = ""; document.getElementById("pinNew").value = ""; document.getElementById("pinConfirm").value = ""; }
+        }).catch(function () { setStatus("pinStatus", "Could not update.", false); });
     });
 
     document.getElementById("test").addEventListener("click", function () {
