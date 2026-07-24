@@ -31,6 +31,16 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
+    packaging {
+        resources {
+            // Jakarta Mail's two jars each ship these license/notice files.
+            excludes += setOf(
+                "META-INF/NOTICE.md", "META-INF/LICENSE.md",
+                "META-INF/NOTICE", "META-INF/LICENSE", "META-INF/DEPENDENCIES",
+            )
+        }
+    }
 }
 
 dependencies {
