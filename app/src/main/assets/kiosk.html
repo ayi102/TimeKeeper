@@ -22,7 +22,12 @@
     }
     .brand { font-weight:700; font-size:1.5rem; letter-spacing:.3px; }
     .byline { font-weight:400; color:var(--muted); font-size:.62em; }
-    .topright { margin-left:auto; text-align:right; line-height:1.2; }
+    .adminbtn {
+      margin-left:auto; background:var(--panel-2); color:var(--text); border:none;
+      border-radius:10px; padding:.6rem 1.1rem; font-size:1rem; font-weight:600; cursor:pointer;
+    }
+    .adminbtn:active { transform:scale(.97); }
+    .topright { text-align:right; line-height:1.2; }
     .clock { font-size:1.6rem; font-weight:600; font-variant-numeric:tabular-nums; }
     .date { color:var(--muted); font-size:.9rem; }
     main { flex:1; padding:1.5rem; overflow-y:auto; }
@@ -64,6 +69,7 @@
 <body>
   <div class="topbar">
     <span class="brand">TimeKeeper <span class="byline">by Ali Ismail</span></span>
+    <button class="adminbtn" id="adminBtn">Admin</button>
     <div class="topright">
       <div class="clock" id="clock">--:--</div>
       <div class="date" id="date"></div>
@@ -150,17 +156,17 @@
 
     loadWorkers();
 
-    // Show the admin address (for your phone) and make the footer open admin
-    // here in the app too — handy on any network / for testing.
+    // The Admin button opens admin here in the app (works while pinned).
+    document.getElementById("adminBtn").onclick = function () { location.href = "/admin"; };
+
+    // The footer shows the address to use from your phone — info only, not a button.
     var footer = document.getElementById("footer");
-    footer.style.cursor = "pointer";
-    footer.onclick = function () { location.href = "/admin"; };
     fetch("/api/info")
       .then(function (r) { return r.json(); })
       .then(function (i) {
-        footer.textContent = "Admin: http://" + i.ip + ":" + i.port + "/admin  ·  tap to open here";
+        footer.textContent = "On your phone (same WiFi): http://" + i.ip + ":" + i.port + "/admin";
       })
-      .catch(function () { footer.textContent = "Tap to open Admin"; });
+      .catch(function () { footer.textContent = ""; });
   </script>
 </body>
 </html>
