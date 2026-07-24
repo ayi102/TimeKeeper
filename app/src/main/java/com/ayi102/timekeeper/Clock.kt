@@ -23,6 +23,7 @@ data class ClockResult(
  */
 object Clock {
     private const val GRACE_MIN = 15L
+    private const val OVERTIME_MIN = 60L
 
     fun toggle(db: Db, empId: Long, now: LocalDateTime = Times.now()): ClockResult {
         val name = db.name(empId) ?: return ClockResult(false, message = "Unknown worker.")
@@ -46,6 +47,24 @@ object Clock {
                 val cin = Scheduling.clockInTime(now, r.start)
                 db.insertClockIn(empId, Times.format(cin), Times.format(now))
                 ClockResult(true, "in", name, Scheduling.fmtTime(cin))
+            }
+        }
+    }
+
+    /**
+     * Close any open entry whose scheduled end (plus the overtime grace) has passed,
+     * capping the recorded clock-out at the scheduled end so a forgotten tap-out never
+     * earns unbounded pay. Mirrors the Pi's auto_clockout daemon. Safe to run any time:
+     * the clock-out is the schedule-derived end, independent of when this runs.
+     */
+    fun autoCloseOverdue(db: Db, now: LocalDateTime = Times.now()) {
+        for ((id, empId, clockIn) in db.openEntries()) {
+            val cin = Times.parse(clockIn)
+            val shift = Scheduling.shiftOf(db.schedulesFor(empId, wd(cin)), cin, GRACE_MIN) ?: continue
+            val end = shift.second
+            if (!now.isBefore(end.plusMinutes(OVERTIME_MIN))) {          // now >= end + grace
+                val out = if (end.isAfter(cin)) end else cin
+                db.autoClose(id, Times.format(out))
             }
         }
     }

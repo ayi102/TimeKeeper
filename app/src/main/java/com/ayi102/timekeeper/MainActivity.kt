@@ -41,6 +41,22 @@ class MainActivity : AppCompatActivity() {
         web.loadUrl("http://127.0.0.1:8080/")
 
         scheduleDailyBackup()
+        scheduleMaintenance()
+    }
+
+    /** Periodic upkeep: auto-clockout of forgotten entries and missed-clock-in alerts. */
+    private fun scheduleMaintenance() {
+        val wm = WorkManager.getInstance(this)
+        wm.enqueueUniquePeriodicWork(
+            "auto-clockout", ExistingPeriodicWorkPolicy.UPDATE,
+            PeriodicWorkRequestBuilder<AutoClockoutWorker>(15, TimeUnit.MINUTES).build()
+        )
+        wm.enqueueUniquePeriodicWork(
+            "missed-clockin", ExistingPeriodicWorkPolicy.UPDATE,
+            PeriodicWorkRequestBuilder<MissedClockinWorker>(15, TimeUnit.MINUTES)
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .build()
+        )
     }
 
     override fun onResume() {

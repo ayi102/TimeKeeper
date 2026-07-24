@@ -8,6 +8,7 @@ import com.ayi102.timekeeper.core.Money
 import com.ayi102.timekeeper.core.Shift
 import com.ayi102.timekeeper.core.Times
 import java.time.Duration
+import java.time.LocalDate
 import java.time.LocalDateTime
 
 /** A worker shown on the kiosk. */
@@ -213,8 +214,10 @@ class Db(private val ctx: Context) : SQLiteOpenHelper(ctx, "timekeeper.db", null
     fun summarize(now: LocalDateTime): List<Summary> {
         data class E(val id: Long, val name: String, val rate: Double)
         val emps = ArrayList<E>()
+        // All workers (active first) — like the Pi. A deactivated worker who is
+        // still owed money must stay visible on the summary and backup email.
         readableDatabase.rawQuery(
-            "SELECT id, name, hourly_rate FROM employees WHERE active = 1 ORDER BY name COLLATE NOCASE", null
+            "SELECT id, name, hourly_rate FROM employees ORDER BY active DESC, name COLLATE NOCASE", null
         ).use { c -> while (c.moveToNext()) emps.add(E(c.getLong(0), c.getString(1), c.getDouble(2))) }
 
         val secs = HashMap<Long, Double>()
@@ -340,6 +343,67 @@ class Db(private val ctx: Context) : SQLiteOpenHelper(ctx, "timekeeper.db", null
             "SELECT id, clock_in FROM time_entries WHERE employee_id = ? AND clock_out IS NULL LIMIT 1",
             arrayOf(empId.toString())
         ).use { if (it.moveToFirst()) OpenEntry(it.getLong(0), it.getString(1)) else null }
+
+    /** Every open entry across all workers, as (id, employeeId, clockIn) — for auto-clockout. */
+    fun openEntries(): List<Triple<Long, Long, String>> {
+        val out = ArrayList<Triple<Long, Long, String>>()
+        readableDatabase.rawQuery(
+            "SELECT id, employee_id, clock_in FROM time_entries WHERE clock_out IS NULL", null
+        ).use { c -> while (c.moveToNext()) out.add(Triple(c.getLong(0), c.getLong(1), c.getString(2))) }
+        return out
+    }
+
+    /** Auto-close a forgotten entry at the scheduled end. Leaves actual_out NULL (never tapped out). */
+    fun autoClose(id: Long, clockOut: String) {
+        writableDatabase.update("time_entries", ContentValues().apply { put("clock_out", clockOut) },
+            "id = ?", arrayOf(id.toString()))
+    }
+
+    /** Per-worker worked seconds for entries whose clock-in DATE is in [start, end] (open → to now). */
+    fun periodSeconds(start: LocalDate, end: LocalDate, now: LocalDateTime): Map<Long, Double> {
+        val out = HashMap<Long, Double>()
+        readableDatabase.rawQuery("SELECT employee_id, clock_in, clock_out FROM time_entries", null).use { c ->
+            while (c.moveToNext()) {
+                val cin = Times.parse(c.getString(1))
+                val d = cin.toLocalDate()
+                if (d < start || d > end) continue
+                val endDt = if (c.isNull(2)) now else Times.parse(c.getString(2))
+                val s = Duration.between(cin, endDt).seconds.toDouble().coerceAtLeast(0.0)
+                out[c.getLong(0)] = (out[c.getLong(0)] ?: 0.0) + s
+            }
+        }
+        return out
+    }
+
+    /** Active workers as (id, name) — for the missed-clock-in check. */
+    fun activeWorkers(): List<Pair<Long, String>> {
+        val out = ArrayList<Pair<Long, String>>()
+        readableDatabase.rawQuery("SELECT id, name FROM employees WHERE active = 1", null)
+            .use { c -> while (c.moveToNext()) out.add(c.getLong(0) to c.getString(1)) }
+        return out
+    }
+
+    /** Clock-in datetimes recorded for a worker on a given calendar date. */
+    fun clockInsOn(empId: Long, date: LocalDate): List<LocalDateTime> {
+        val out = ArrayList<LocalDateTime>()
+        readableDatabase.rawQuery(
+            "SELECT clock_in FROM time_entries WHERE employee_id = ? AND substr(clock_in,1,10) = ?",
+            arrayOf(empId.toString(), date.toString())
+        ).use { c -> while (c.moveToNext()) out.add(Times.parse(c.getString(0))) }
+        return out
+    }
+
+    fun alertExists(empId: Long, shiftKey: String): Boolean =
+        readableDatabase.rawQuery(
+            "SELECT 1 FROM clockin_alerts WHERE employee_id = ? AND shift_date = ?",
+            arrayOf(empId.toString(), shiftKey)
+        ).use { it.moveToFirst() }
+
+    fun recordAlert(empId: Long, shiftKey: String, sentAt: String) {
+        writableDatabase.insertWithOnConflict("clockin_alerts", null, ContentValues().apply {
+            put("employee_id", empId); put("shift_date", shiftKey); put("sent_at", sentAt)
+        }, SQLiteDatabase.CONFLICT_IGNORE)
+    }
 
     /** All shifts for a worker as (weekday, start, end) rows, for the editor. */
     fun schedulesOf(empId: Long): List<Triple<Int, String, String>> {

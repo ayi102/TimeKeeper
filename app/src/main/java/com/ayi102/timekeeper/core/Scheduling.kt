@@ -101,8 +101,10 @@ object Scheduling {
 }
 
 object Money {
+    // HALF_EVEN (banker's rounding) to match Python's round(), so cents agree with
+    // the Pi's historical numbers.
     fun round2(x: Double): Double =
-        BigDecimal.valueOf(x).setScale(2, RoundingMode.HALF_UP).toDouble()
+        BigDecimal.valueOf(x).setScale(2, RoundingMode.HALF_EVEN).toDouble()
 
     fun hours(seconds: Double): Double = round2(seconds / 3600.0)
     fun pay(hours: Double, rate: Double): Double = round2(hours * rate)
