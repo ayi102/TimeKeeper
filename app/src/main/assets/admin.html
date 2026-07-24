@@ -123,7 +123,7 @@
       fetch("/admin/employee" + q, { method: "POST" }).then(function (r) { return r.json(); }).then(function (res) {
         if (!res.ok) { alert(res.message || "Could not save."); return; }
         clearForm(); loadEmployees(); loadSummary();
-      });
+      }).catch(function () { alert("Could not save — try logging in again."); });
     }
     function toggleActive(e) {
       fetch("/admin/employee/active?id=" + e.id + "&active=" + (e.active ? "0" : "1"), { method: "POST" })

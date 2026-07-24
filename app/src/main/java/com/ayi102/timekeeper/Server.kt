@@ -44,8 +44,10 @@ class Server(
             // ----- login -----
             session.method == Method.POST && uri == "/admin/login" -> {
                 val ok = session.parameters["pin"]?.firstOrNull() == adminPin
-                if (ok) session.cookies.set("tk_auth", token, 30)
-                json(JSONObject().put("ok", ok).toString())
+                val resp = json(JSONObject().put("ok", ok).toString())
+                // Path=/ so the cookie is sent to every endpoint (not just /admin).
+                if (ok) resp.addHeader("Set-Cookie", "tk_auth=$token; Path=/; Max-Age=2592000")
+                resp
             }
 
             // ----- admin (PIN required) -----
