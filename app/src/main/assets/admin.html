@@ -155,7 +155,8 @@
             '<td class="num">' + money(e.paid) + "</td>" +
             '<td class="num owed">' + money(e.owed) + "</td>" +
             '<td class="num">' + money(e.tips) + "</td>" +
-            '<td style="text-align:right"><a class="btn primary" href="/admin/payments?emp=' + e.id + '">Pay Out</a></td>';
+            '<td style="text-align:right;white-space:nowrap"><a class="btn" href="/admin/entries?emp=' + e.id + '">Entries</a> ' +
+              '<a class="btn primary" href="/admin/payments?emp=' + e.id + '">Pay Out</a></td>';
           rows.appendChild(tr);
         });
         document.getElementById("sumTotals").innerHTML =

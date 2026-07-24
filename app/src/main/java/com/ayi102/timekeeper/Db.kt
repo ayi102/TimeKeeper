@@ -28,6 +28,9 @@ data class EmpAdmin(val id: Long, val name: String, val rate: Double, val active
 /** One recorded payout. */
 data class Payment(val id: Long, val paidAt: String, val amount: Double, val tip: Double, val note: String)
 
+/** One time-clock record for the timesheet view (hours computed to `now` if still open). */
+data class EntryRow(val id: Long, val clockIn: String, val clockOut: String?, val hours: Double, val open: Boolean)
+
 /** Money state for one worker (for the payouts screen). */
 data class Finance(
     val name: String, val earned: Double, val paid: Double,
@@ -287,6 +290,44 @@ class Db(private val ctx: Context) : SQLiteOpenHelper(ctx, "timekeeper.db", null
 
     fun deletePayment(id: Long) {
         writableDatabase.delete("payments", "id = ?", arrayOf(id.toString()))
+    }
+
+    /** All time entries for a worker, newest first, with hours computed (to `now` if open). */
+    fun entriesFor(empId: Long, now: LocalDateTime): List<EntryRow> {
+        val out = ArrayList<EntryRow>()
+        readableDatabase.rawQuery(
+            "SELECT id, clock_in, clock_out FROM time_entries WHERE employee_id = ? ORDER BY clock_in DESC",
+            arrayOf(empId.toString())
+        ).use { c ->
+            while (c.moveToNext()) {
+                val cin = c.getString(1)
+                val cout = if (c.isNull(2)) null else c.getString(2)
+                val end = if (cout != null) Times.parse(cout) else now
+                val s = Duration.between(Times.parse(cin), end).seconds.toDouble().coerceAtLeast(0.0)
+                out.add(EntryRow(c.getLong(0), cin, cout, Money.hours(s), cout == null))
+            }
+        }
+        return out
+    }
+
+    /** Add a manual time entry. clockOut null = still clocked in. */
+    fun addEntry(empId: Long, clockIn: String, clockOut: String?): Long =
+        writableDatabase.insert("time_entries", null, ContentValues().apply {
+            put("employee_id", empId)
+            put("clock_in", clockIn); put("actual_in", clockIn)
+            if (clockOut != null) { put("clock_out", clockOut); put("actual_out", clockOut) }
+        })
+
+    /** Edit an entry's paid clock-in/out. clockOut null re-opens it. Raw actual_* taps are left as-is. */
+    fun updateEntry(id: Long, clockIn: String, clockOut: String?) {
+        writableDatabase.update("time_entries", ContentValues().apply {
+            put("clock_in", clockIn)
+            if (clockOut != null) put("clock_out", clockOut) else putNull("clock_out")
+        }, "id = ?", arrayOf(id.toString()))
+    }
+
+    fun deleteEntry(id: Long) {
+        writableDatabase.delete("time_entries", "id = ?", arrayOf(id.toString()))
     }
 
     fun name(empId: Long): String? =

@@ -59,6 +59,7 @@ class Server(
             get && uri == "/admin" -> html(asset(if (authed(session)) "admin.html" else "login.html"))
             get && uri == "/admin/schedule" -> html(asset(if (authed(session)) "schedule.html" else "login.html"))
             get && uri == "/admin/payments" -> html(asset(if (authed(session)) "payments.html" else "login.html"))
+            get && uri == "/admin/entries" -> html(asset(if (authed(session)) "entries.html" else "login.html"))
             get && uri == "/admin/settings" -> html(asset(if (authed(session)) "settings.html" else "login.html"))
 
             // ----- admin APIs (PIN required) -----
@@ -136,6 +137,43 @@ class Server(
                 json(JSONObject().put("ok", id != null).toString())
             }
 
+            // ----- time entries (timesheet) -----
+            get && uri == "/api/entries" -> guard(session) {
+                val emp = param(session, "emp")?.toLongOrNull()
+                if (emp == null) json(JSONObject().put("ok", false).toString())
+                else {
+                    val f = db.financeFor(emp, Times.now())   // name regardless of active
+                    val arr = JSONArray()
+                    for (r in db.entriesFor(emp, Times.now()))
+                        arr.put(JSONObject().put("id", r.id).put("in", r.clockIn)
+                            .put("out", r.clockOut ?: JSONObject.NULL).put("hours", r.hours).put("open", r.open))
+                    json(JSONObject().put("ok", true).put("name", f?.name ?: "").put("entries", arr).toString())
+                }
+            }
+            post && uri == "/admin/entry" -> guard(session) {
+                val emp = param(session, "emp")?.toLongOrNull()
+                val id = param(session, "id")?.toLongOrNull()
+                try {
+                    val cin = normTime(param(session, "in"))
+                    val cout = normTime(param(session, "out"))
+                    when {
+                        cin == null -> json(err("Clock-in time is required."))
+                        cout != null && !Times.parse(cout).isAfter(Times.parse(cin)) ->
+                            json(err("Clock-out must be after clock-in."))
+                        id != null -> { db.updateEntry(id, cin, cout); ok() }
+                        emp != null -> { db.addEntry(emp, cin, cout); ok() }
+                        else -> json(err("Missing worker."))
+                    }
+                } catch (e: Exception) {
+                    json(err("Invalid date/time."))
+                }
+            }
+            post && uri == "/admin/entry/delete" -> guard(session) {
+                val id = param(session, "id")?.toLongOrNull()
+                if (id != null) db.deleteEntry(id)
+                json(JSONObject().put("ok", id != null).toString())
+            }
+
             // ----- mail settings + backup -----
             get && uri == "/api/settings" -> guard(session) {
                 val s = Settings(context)
@@ -205,6 +243,16 @@ class Server(
         newFixedLengthResponse(Response.Status.BAD_REQUEST, MIME_PLAINTEXT, msg)
 
     private fun ok(): Response = json(JSONObject().put("ok", true).toString())
+
+    private fun err(msg: String): String = JSONObject().put("ok", false).put("message", msg).toString()
+
+    /** Normalise a datetime-local value ("yyyy-MM-ddTHH:mm") to stored form; validates by parsing. */
+    private fun normTime(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        val s = if (raw.length == 16) "$raw:00" else raw
+        Times.parse(s)   // throws if malformed
+        return s
+    }
 
     private fun workersJson(): String {
         val arr = JSONArray()

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TimeKeeper · Timesheet</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#1e293b; --panel-2:#334155; --text:#f1f5f9; --muted:#94a3b8; --blue:#3b82f6; --green:#22c55e; --red:#ef4444; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-height:100%; }
+    body { font-family:-apple-system,"Roboto",sans-serif; background:var(--bg); color:var(--text); }
+    .bar { display:flex; align-items:center; gap:1rem; padding:1rem 1.25rem; background:var(--panel); border-bottom:1px solid var(--panel-2); }
+    .brand { font-weight:700; font-size:1.1rem; }
+    main { padding:1rem 1.25rem; display:flex; flex-direction:column; gap:1.25rem; max-width:820px; margin:0 auto; }
+    .card { background:var(--panel); border-radius:14px; padding:1rem 1.25rem; }
+    h2 { margin:.2rem 0 1rem; font-size:1.1rem; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { text-align:left; padding:.6rem .5rem; border-bottom:1px solid var(--panel-2); }
+    th { color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.5px; }
+    td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+    tfoot td { font-weight:700; border-top:2px solid var(--panel-2); }
+    .open { color:var(--green); }
+    .btn { border:none; border-radius:8px; cursor:pointer; padding:.5rem .8rem; font-size:.85rem; font-weight:600; background:var(--panel-2); color:var(--text); text-decoration:none; }
+    .btn.primary { background:var(--blue); }
+    .btn.ghost { background:transparent; border:1px solid var(--panel-2); }
+    .btn.danger { background:var(--red); }
+    .row-actions { display:flex; gap:.4rem; justify-content:flex-end; }
+    .form { display:flex; gap:.75rem; align-items:flex-end; flex-wrap:wrap; }
+    .form label { display:flex; flex-direction:column; gap:.3rem; font-size:.8rem; color:var(--muted); }
+    .form input { background:var(--bg); border:1px solid var(--panel-2); color:var(--text); padding:.55rem .6rem; border-radius:8px; font-size:1rem; }
+    .hint { color:var(--muted); font-size:.85rem; }
+    .status { font-size:.9rem; min-height:1.2em; margin-top:.5rem; }
+    .status.err { color:#fca5a5; } .status.ok { color:#86efac; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <a href="/admin" class="btn ghost">← Admin</a>
+    <span class="brand">Timesheet — <span id="who">…</span></span>
+  </div>
+
+  <main>
+    <div class="card">
+      <h2 id="formTitle">Add entry</h2>
+      <div class="form">
+        <input type="hidden" id="entryId">
+        <label>Clock in<input type="datetime-local" id="inTime"></label>
+        <label>Clock out <span class="hint">(blank = still in)</span><input type="datetime-local" id="outTime"></label>
+        <button class="btn primary" id="save">Save</button>
+        <button class="btn ghost" id="clear">Clear</button>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div class="card">
+      <h2>Entries</h2>
+      <table>
+        <thead><tr><th>Clock in</th><th>Clock out</th><th class="num">Hours</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+        <tfoot><tr><td>Total</td><td></td><td class="num" id="totalHours">0.00</td><td></td></tr></tfoot>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    var emp = new URLSearchParams(location.search).get("emp");
+
+    function setStatus(msg, ok) {
+      var el = document.getElementById("status");
+      el.textContent = msg || ""; el.className = "status " + (ok ? "ok" : "err");
+    }
+    // "2026-07-20T14:05:00" -> "Mon Jul 20, 2:05 PM"
+    function fmt(iso) {
+      if (!iso) return "";
+      var d = new Date(iso);
+      if (isNaN(d)) return iso;
+      return d.toLocaleString(undefined, { weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
+    }
+    function forInput(iso) { return iso ? iso.slice(0, 16) : ""; }  // datetime-local wants yyyy-MM-ddTHH:mm
+
+    function load() {
+      fetch("/api/entries?emp=" + emp).then(function (r) { return r.json(); }).then(function (res) {
+        if (!res.ok) { setStatus("Could not load entries.", false); return; }
+        document.getElementById("who").textContent = res.name || "";
+        var rows = document.getElementById("rows"); rows.innerHTML = "";
+        var total = 0;
+        res.entries.forEach(function (e) {
+          total += e.hours;
+          var tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td>" + fmt(e.in) + "</td>" +
+            "<td>" + (e.open ? '<span class="open">In progress</span>' : fmt(e.out)) + "</td>" +
+            '<td class="num">' + e.hours.toFixed(2) + "</td>" +
+            '<td><div class="row-actions"><button class="btn">Edit</button><button class="btn danger">Delete</button></div></td>';
+          var btns = tr.querySelectorAll("button");
+          btns[0].onclick = function () { edit(e); };
+          btns[1].onclick = function () { del(e); };
+          rows.appendChild(tr);
+        });
+        document.getElementById("totalHours").textContent = total.toFixed(2);
+      }).catch(function () { setStatus("Could not reach the server.", false); });
+    }
+
+    function edit(e) {
+      document.getElementById("entryId").value = e.id;
+      document.getElementById("inTime").value = forInput(e.in);
+      document.getElementById("outTime").value = forInput(e.out);
+      document.getElementById("formTitle").textContent = "Edit entry";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    function clearForm() {
+      document.getElementById("entryId").value = "";
+      document.getElementById("inTime").value = "";
+      document.getElementById("outTime").value = "";
+      document.getElementById("formTitle").textContent = "Add entry";
+      setStatus("", true);
+    }
+    function save() {
+      var id = document.getElementById("entryId").value;
+      var cin = document.getElementById("inTime").value;
+      var cout = document.getElementById("outTime").value;
+      if (!cin) { setStatus("Clock-in time is required.", false); return; }
+      var q = "?emp=" + emp + (id ? "&id=" + id : "") +
+              "&in=" + encodeURIComponent(cin) + "&out=" + encodeURIComponent(cout);
+      fetch("/admin/entry" + q, { method: "POST" }).then(function (r) { return r.json(); }).then(function (res) {
+        if (!res.ok) { setStatus(res.message || "Could not save.", false); return; }
+        clearForm(); load();
+      }).catch(function () { setStatus("Could not save.", false); });
+    }
+    function del(e) {
+      if (!confirm("Delete this entry (" + fmt(e.in) + ")? This cannot be undone.")) return;
+      fetch("/admin/entry/delete?id=" + e.id, { method: "POST" })
+        .then(function () { load(); })
+        .catch(function () { setStatus("Could not delete.", false); });
+    }
+
+    document.getElementById("save").addEventListener("click", save);
+    document.getElementById("clear").addEventListener("click", clearForm);
+    load();
+  </script>
+</body>
+</html>
