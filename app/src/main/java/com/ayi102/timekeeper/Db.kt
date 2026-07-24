@@ -209,6 +209,36 @@ class Db(context: Context) : SQLiteOpenHelper(context, "timekeeper.db", null, 1)
             arrayOf(empId.toString())
         ).use { if (it.moveToFirst()) OpenEntry(it.getLong(0), it.getString(1)) else null }
 
+    /** All shifts for a worker as (weekday, start, end) rows, for the editor. */
+    fun schedulesOf(empId: Long): List<Triple<Int, String, String>> {
+        val out = ArrayList<Triple<Int, String, String>>()
+        readableDatabase.rawQuery(
+            "SELECT weekday, start_time, end_time FROM schedules WHERE employee_id = ? ORDER BY weekday, start_time",
+            arrayOf(empId.toString())
+        ).use { c ->
+            while (c.moveToNext()) out.add(Triple(c.getInt(0), c.getString(1), c.getString(2)))
+        }
+        return out
+    }
+
+    /** Replace a worker's entire schedule with the given (weekday, start, end) rows. */
+    fun replaceSchedules(empId: Long, shifts: List<Triple<Int, String, String>>) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete("schedules", "employee_id = ?", arrayOf(empId.toString()))
+            for ((wd, s, e) in shifts) {
+                db.insert("schedules", null, ContentValues().apply {
+                    put("employee_id", empId); put("weekday", wd)
+                    put("start_time", s); put("end_time", e)
+                })
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     /** Shifts for a worker on a given weekday (0=Mon..6=Sun), earliest first. */
     fun schedulesFor(empId: Long, weekday: Int): List<Shift> {
         val out = ArrayList<Shift>()

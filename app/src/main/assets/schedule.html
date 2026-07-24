@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TimeKeeper · Schedule</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#1e293b; --panel-2:#334155; --text:#f1f5f9; --muted:#94a3b8; --blue:#3b82f6; --red:#ef4444; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-height:100%; }
+    body { font-family:-apple-system,"Roboto",sans-serif; background:var(--bg); color:var(--text); }
+    .bar { display:flex; align-items:center; gap:1rem; padding:1rem 1.25rem; background:var(--panel); border-bottom:1px solid var(--panel-2); }
+    .brand { font-weight:700; font-size:1.1rem; }
+    main { padding:1rem 1.25rem; max-width:760px; margin:0 auto; }
+    .card { background:var(--panel); border-radius:14px; padding:1rem 1.25rem; }
+    .intro { color:var(--muted); font-size:.9rem; margin:.25rem 0 1rem; }
+    .day { border-bottom:1px solid var(--panel-2); padding:.9rem 0; }
+    .day:first-child { padding-top:0; }
+    .day-head { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+    .day-head strong { font-size:1rem; }
+    .shiftlist { margin-top:.6rem; display:flex; flex-direction:column; gap:.6rem; }
+    .shiftrow { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; }
+    .shiftrow label { display:flex; flex-direction:column; gap:.25rem; font-size:.75rem; color:var(--muted); }
+    .shiftrow input { background:var(--bg); border:1px solid var(--panel-2); color:var(--text); padding:.5rem .6rem; border-radius:8px; font-size:1rem; }
+    .overnight { font-size:.7rem; color:var(--blue); }
+    .off { color:var(--muted); margin:.5rem 0 0; }
+    .btn { border:none; border-radius:8px; cursor:pointer; padding:.5rem .8rem; font-size:.85rem; font-weight:600; background:var(--panel-2); color:var(--text); text-decoration:none; }
+    .btn.primary { background:var(--blue); }
+    .btn.ghost { background:transparent; border:1px solid var(--panel-2); }
+    .remove { margin-left:auto; }
+    .savebar { margin-top:1.25rem; display:flex; align-items:center; gap:1rem; }
+    .status { color:var(--muted); font-size:.9rem; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <a href="/admin" class="btn ghost">← Admin</a>
+    <span class="brand" id="title">Schedule</span>
+  </div>
+  <main>
+    <div class="card">
+      <p class="intro">
+        Add each shift this worker works. A day can have more than one shift.
+        For an <strong>overnight</strong> shift, set the end earlier than the start
+        (e.g. 7:00 PM → 7:00 AM). A day with no shifts is a day off.
+      </p>
+      <div id="days"></div>
+      <div class="savebar">
+        <button class="btn primary" id="save">Save Schedule</button>
+        <span class="status" id="status"></span>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    var DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+    var emp = new URLSearchParams(location.search).get("emp");
+
+    function addRow(list, start, end) {
+      var row = document.createElement("div");
+      row.className = "shiftrow";
+      row.innerHTML =
+        '<label>Start<input type="time" class="start"></label>' +
+        '<label>End<input type="time" class="end"></label>' +
+        '<span class="overnight" hidden>ends next day</span>' +
+        '<button class="btn ghost remove">✕</button>';
+      row.querySelector(".start").value = start || "09:00";
+      row.querySelector(".end").value = end || "17:00";
+      function mark() {
+        var s = row.querySelector(".start").value, e = row.querySelector(".end").value;
+        row.querySelector(".overnight").hidden = !(s && e && e <= s);
+      }
+      row.querySelector(".start").addEventListener("input", mark);
+      row.querySelector(".end").addEventListener("input", mark);
+      row.querySelector(".remove").addEventListener("click", function () { row.remove(); });
+      list.appendChild(row); mark();
+    }
+
+    function build(shifts) {
+      var byDay = {};
+      shifts.forEach(function (s) { (byDay[s.weekday] = byDay[s.weekday] || []).push(s); });
+      var container = document.getElementById("days");
+      container.innerHTML = "";
+      DAYS.forEach(function (name, wd) {
+        var day = document.createElement("div");
+        day.className = "day"; day.dataset.weekday = wd;
+        day.innerHTML =
+          '<div class="day-head"><strong>' + name + '</strong>' +
+          '<button class="btn add">+ add shift</button></div>' +
+          '<div class="shiftlist"></div>';
+        var list = day.querySelector(".shiftlist");
+        (byDay[wd] || []).forEach(function (s) { addRow(list, s.start, s.end); });
+        day.querySelector(".add").addEventListener("click", function () { addRow(list); });
+        container.appendChild(day);
+      });
+    }
+
+    function collect() {
+      var out = [];
+      document.querySelectorAll(".day").forEach(function (day) {
+        var wd = parseInt(day.dataset.weekday, 10);
+        day.querySelectorAll(".shiftrow").forEach(function (row) {
+          out.push({ weekday: wd, start: row.querySelector(".start").value, end: row.querySelector(".end").value });
+        });
+      });
+      return out;
+    }
+
+    function save() {
+      var shifts = encodeURIComponent(JSON.stringify(collect()));
+      fetch("/admin/schedule?emp=" + emp + "&shifts=" + shifts, { method: "POST" })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (!res.ok) { document.getElementById("status").textContent = res.message || "Could not save."; return; }
+          var notes = [];
+          if (res.skipped) notes.push(res.skipped + " skipped (start = end)");
+          if (res.overlaps) notes.push(res.overlaps + " overlapping dropped");
+          document.getElementById("status").textContent = "Saved" + (notes.length ? " — " + notes.join(", ") : "") + ".";
+        })
+        .catch(function () { document.getElementById("status").textContent = "Could not save — try logging in again."; });
+    }
+
+    document.getElementById("save").addEventListener("click", save);
+
+    fetch("/api/schedule?emp=" + emp)
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        document.getElementById("title").textContent = (res.name || "Worker") + " · Schedule";
+        build(res.shifts || []);
+      })
+      .catch(function () { document.getElementById("status").textContent = "Could not load schedule."; });
+  </script>
+</body>
+</html>

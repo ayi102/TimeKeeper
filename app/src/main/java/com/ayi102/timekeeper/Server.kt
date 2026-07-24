@@ -1,6 +1,8 @@
 package com.ayi102.timekeeper
 
 import android.content.res.AssetManager
+import com.ayi102.timekeeper.core.Scheduling
+import com.ayi102.timekeeper.core.Shift
 import com.ayi102.timekeeper.core.Times
 import fi.iki.elonen.NanoHTTPD
 import org.json.JSONArray
@@ -53,6 +55,27 @@ class Server(
             // ----- admin (PIN required) -----
             session.method == Method.GET && uri == "/admin" ->
                 html(asset(if (authed(session)) "admin.html" else "login.html"))
+
+            session.method == Method.GET && uri == "/admin/schedule" ->
+                html(asset(if (authed(session)) "schedule.html" else "login.html"))
+
+            session.method == Method.GET && uri == "/api/schedule" -> guard(session) {
+                val emp = session.parameters["emp"]?.firstOrNull()?.toLongOrNull()
+                if (emp == null) json(JSONObject().put("ok", false).toString())
+                else {
+                    val arr = JSONArray()
+                    for ((wd, s, e) in db.schedulesOf(emp)) {
+                        arr.put(JSONObject().put("weekday", wd).put("start", s).put("end", e))
+                    }
+                    json(JSONObject().put("ok", true).put("name", db.name(emp) ?: "").put("shifts", arr).toString())
+                }
+            }
+
+            session.method == Method.POST && uri == "/admin/schedule" -> guard(session) {
+                val emp = session.parameters["emp"]?.firstOrNull()?.toLongOrNull()
+                if (emp == null) json(JSONObject().put("ok", false).toString())
+                else json(saveSchedule(emp, session.parameters["shifts"]?.firstOrNull() ?: "[]"))
+            }
             session.method == Method.GET && uri == "/api/summary" ->
                 if (authed(session)) json(summaryJson()) else unauthorized()
 
@@ -128,6 +151,33 @@ class Server(
             )
         }
         return arr.toString()
+    }
+
+    /** Validate + de-overlap submitted shifts, then replace the worker's schedule. */
+    private fun saveSchedule(empId: Long, rawShifts: String): String = try {
+        val arr = JSONArray(rawShifts)
+        val byDay = HashMap<Int, MutableList<Pair<String, String>>>()
+        var skipped = 0
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            val s = o.optString("start"); val e = o.optString("end")
+            if (s.isEmpty() || e.isEmpty() || s == e) { skipped++; continue }
+            byDay.getOrPut(o.getInt("weekday")) { arrayListOf() }.add(s to e)
+        }
+        val accepted = ArrayList<Triple<Int, String, String>>()
+        var overlaps = 0
+        for ((wd, list) in byDay) {
+            val ok = ArrayList<Shift>()
+            for ((s, e) in list.sortedBy { it.first }) {
+                val sh = Shift(s, e)
+                if (ok.any { Scheduling.shiftsOverlap(sh, it) }) { overlaps++; continue }
+                ok.add(sh); accepted.add(Triple(wd, s, e))
+            }
+        }
+        db.replaceSchedules(empId, accepted)
+        JSONObject().put("ok", true).put("skipped", skipped).put("overlaps", overlaps).toString()
+    } catch (e: Exception) {
+        JSONObject().put("ok", false).put("message", "Bad schedule data.").toString()
     }
 
     private fun resultJson(r: ClockResult): String {

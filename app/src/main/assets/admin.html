@@ -90,14 +90,16 @@
             "<td>" + escapeHtml(e.name) + tag + "</td>" +
             '<td class="num">$' + e.rate.toFixed(2) + "/hr</td>" +
             '<td><div class="row-actions">' +
+              '<button class="btn">Schedule</button>' +
               '<button class="btn">Edit</button>' +
               '<button class="btn ghost">' + (e.active ? "Deactivate" : "Reactivate") + "</button>" +
               '<button class="btn danger">Delete</button>' +
             "</div></td>";
           var btns = tr.querySelectorAll("button");
-          btns[0].onclick = function () { editEmp(e); };
-          btns[1].onclick = function () { toggleActive(e); };
-          btns[2].onclick = function () { deleteEmp(e); };
+          btns[0].onclick = function () { location.href = "/admin/schedule?emp=" + e.id; };
+          btns[1].onclick = function () { editEmp(e); };
+          btns[2].onclick = function () { toggleActive(e); };
+          btns[3].onclick = function () { deleteEmp(e); };
           rows.appendChild(tr);
         });
       });
