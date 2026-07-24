@@ -84,12 +84,7 @@
 
     <div class="card">
       <h2>Kiosk</h2>
-      <p class="hint" style="margin-top:0">Leave the locked kiosk to use the tablet for something else. Re-open the <strong>TimeKeeper</strong> app to lock it back down.</p>
-      <div class="actions">
-        <button class="btn" id="exit">Exit kiosk</button>
-      </div>
-      <p class="hint">Emergency exit (works even if the app freezes): press and hold <strong>Back</strong> and <strong>Recent&nbsp;apps</strong> together.</p>
-      <div class="status" id="exitStatus"></div>
+      <p class="hint" style="margin-top:0">To leave the locked kiosk (to use the tablet or change settings), press and hold <strong>Back</strong> and <strong>Recent&nbsp;apps</strong> together to unpin — this works even if the app freezes. Re-open the <strong>TimeKeeper</strong> app to lock it back down.</p>
     </div>
   </main>
 
@@ -137,11 +132,6 @@
       fetch("/admin/backup/test", { method: "POST" }).then(function (r) { return r.json(); }).then(function (res) {
         setStatus("testStatus", res.message || (res.ok ? "Sent." : "Failed."), res.ok);
       }).catch(function () { setStatus("testStatus", "Failed to send.", false); });
-    });
-
-    document.getElementById("exit").addEventListener("click", function () {
-      if (window.Android && window.Android.exitKiosk) window.Android.exitKiosk();
-      else setStatus("exitStatus", "Only works on the tablet running the app.", false);
     });
 
     document.getElementById("restore").addEventListener("click", function () {

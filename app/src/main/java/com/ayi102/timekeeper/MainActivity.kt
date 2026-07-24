@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.os.Bundle
 import android.view.WindowManager
-import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
@@ -37,7 +36,6 @@ class MainActivity : AppCompatActivity() {
         val web = findViewById<WebView>(R.id.webview)
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
-        web.addJavascriptInterface(KioskBridge(), "Android")
         web.loadUrl("http://127.0.0.1:8080/")
 
         scheduleDailyBackup()
@@ -78,17 +76,6 @@ class MainActivity : AppCompatActivity() {
         val am = getSystemService(ACTIVITY_SERVICE) as ActivityManager
         if (am.lockTaskModeState == ActivityManager.LOCK_TASK_MODE_NONE) {
             try { startLockTask() } catch (_: Exception) { /* pinning unavailable */ }
-        }
-    }
-
-    /** Called from the admin settings page (JS) to leave the kiosk. */
-    inner class KioskBridge {
-        @JavascriptInterface
-        fun exitKiosk() {
-            runOnUiThread {
-                try { stopLockTask() } catch (_: Exception) {}
-                moveTaskToBack(true)
-            }
         }
     }
 
