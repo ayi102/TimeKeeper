@@ -7,7 +7,15 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import fi.iki.elonen.NanoHTTPD
+import java.time.Duration
+import java.time.LocalDateTime
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
     private lateinit var db: Db
@@ -33,6 +41,27 @@ class MainActivity : AppCompatActivity() {
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
         web.loadUrl("http://127.0.0.1:8080/")
+
+        scheduleDailyBackup()
+    }
+
+    /** Schedule the backup email to run every day at ~6 AM. */
+    private fun scheduleDailyBackup() {
+        val now = LocalDateTime.now()
+        var next = now.toLocalDate().atTime(6, 0)
+        if (!next.isAfter(now)) next = next.plusDays(1)
+        val delayMinutes = Duration.between(now, next).toMinutes()
+
+        val request = PeriodicWorkRequestBuilder<BackupWorker>(24, TimeUnit.HOURS)
+            .setInitialDelay(delayMinutes, TimeUnit.MINUTES)
+            .setConstraints(
+                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+            )
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "daily-backup", ExistingPeriodicWorkPolicy.UPDATE, request
+        )
     }
 
     override fun onDestroy() {

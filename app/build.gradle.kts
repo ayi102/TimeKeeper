@@ -52,6 +52,7 @@ dependencies {
     implementation(libs.nanohttpd)
     implementation(libs.javamail.mail)
     implementation(libs.javamail.activation)
+    implementation(libs.androidx.work)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
