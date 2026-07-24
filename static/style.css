@@ -1,0 +1,313 @@
+:root {
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --panel-2: #334155;
+  --text: #f1f5f9;
+  --muted: #94a3b8;
+  --green: #22c55e;
+  --green-d: #16a34a;
+  --red: #ef4444;
+  --red-d: #dc2626;
+  --blue: #3b82f6;
+  --blue-d: #2563eb;
+  --radius: 16px;
+}
+
+* { box-sizing: border-box; }
+/* The `hidden` attribute must win over display rules like `.overlay{display:flex}`. */
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ============================== KIOSK ============================== */
+body.kiosk { display: flex; flex-direction: column; overflow: hidden; user-select: none; }
+
+.topbar {
+  display: flex; align-items: center; gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--panel-2);
+}
+.brand { font-weight: 700; font-size: 1.25rem; letter-spacing: .3px; }
+.byline { font-weight: 400; color: var(--muted); font-size: .62em; }
+.gear {
+  text-decoration: none; color: var(--text); line-height: 1;
+  padding: .3rem .6rem; border-radius: 10px; border: 1px solid var(--panel-2);
+}
+.gear:active { background: var(--panel-2); }
+
+/* Settings page: scanned-network list + connect result message */
+.netlist { list-style: none; margin: .75rem 0 0; padding: 0; }
+.netlist li {
+  padding: .7rem .9rem; border: 1px solid var(--panel-2); border-radius: 10px;
+  margin-bottom: .4rem; cursor: pointer; font-size: 1rem;
+}
+.netlist li:active { background: var(--panel-2); }
+.wifi-msg { margin-top: .75rem; }
+.wifi-msg.ok { color: #86efac; }
+.wifi-msg.err { color: #fca5a5; }
+.topright { margin-left: auto; text-align: right; line-height: 1.2; }
+.clock { font-size: 1.5rem; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.date { color: var(--text); font-size: .95rem; white-space: nowrap; }
+.subline { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+.subline strong { color: var(--text); }
+
+.kiosk main { flex: 1; padding: 1.5rem; overflow-y: auto; }
+.prompt { text-align: center; font-size: 1.6rem; font-weight: 600; margin: .5rem 0 1.5rem; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.25rem;
+}
+.namecard {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: .6rem;
+  min-height: 150px;
+  border: none; border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  padding: 1.25rem;
+  transition: transform .08s ease, box-shadow .15s ease;
+  border: 2px solid transparent;
+}
+.namecard:active { transform: scale(.97); }
+.namecard-name { font-size: 1.6rem; font-weight: 700; text-align: center; }
+.namecard-status { font-size: 1rem; color: var(--muted); }
+.namecard.is-in { border-color: var(--green); }
+.namecard.is-in .namecard-status { color: var(--green); }
+.namecard.is-out { border-color: var(--panel-2); }
+
+.empty { text-align: center; color: var(--muted); font-size: 1.2rem; margin-top: 3rem; }
+
+/* Overlay / action sheet */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.6);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 50;
+}
+.sheet {
+  background: var(--panel);
+  border-radius: 24px;
+  padding: 2.5rem 2rem;
+  width: min(90vw, 460px);
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,.5);
+}
+.sheet-name { font-size: 2rem; font-weight: 700; }
+.sheet-status { color: var(--muted); margin: .5rem 0 1.75rem; font-size: 1.1rem; }
+.bigbtn {
+  width: 100%; padding: 1.5rem; font-size: 1.6rem; font-weight: 700;
+  border: none; border-radius: var(--radius); color: #fff; cursor: pointer;
+}
+.bigbtn.in { background: var(--green); }
+.bigbtn.in:active { background: var(--green-d); }
+.bigbtn.out { background: var(--red); }
+.bigbtn.out:active { background: var(--red-d); }
+.bigbtn:disabled { opacity: .6; }
+.cancel {
+  margin-top: 1rem; background: none; border: none; color: var(--muted);
+  font-size: 1.05rem; padding: .75rem; cursor: pointer; width: 100%;
+}
+.checkmark {
+  font-size: 4rem; color: var(--green);
+  width: 96px; height: 96px; line-height: 96px; margin: 0 auto 1rem;
+  border-radius: 50%; background: rgba(34,197,94,.15);
+}
+.done-msg { font-size: 1.4rem; font-weight: 600; }
+.checkmark.err { color: var(--red); background: rgba(239,68,68,.15); }
+
+/* ============================== ADMIN ============================== */
+body.admin { min-height: 100%; display: block; }
+.adminbar {
+  display: flex; align-items: center; gap: 1rem;
+  padding: 1rem 1.5rem; background: var(--panel);
+  border-bottom: 1px solid var(--panel-2);
+}
+.adminbar .spacer { flex: 1; }
+.muted { color: var(--muted); }
+.container { max-width: 980px; margin: 0 auto; padding: 1.5rem; }
+
+.card {
+  background: var(--panel); border-radius: var(--radius);
+  padding: 1.5rem; margin-bottom: 1.5rem;
+}
+.card-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .5rem; }
+.card h2 { margin: 0 0 1rem; }
+.grand { color: var(--muted); }
+.grand strong { color: var(--green); font-size: 1.15rem; }
+
+table.data { width: 100%; border-collapse: collapse; }
+table.data th, table.data td { text-align: left; padding: .7rem .5rem; border-bottom: 1px solid var(--panel-2); }
+table.data th { color: var(--muted); font-weight: 600; font-size: .85rem; text-transform: uppercase; letter-spacing: .5px; }
+table.data tfoot th { color: var(--text); text-transform: none; font-size: 1rem; border-top: 2px solid var(--panel-2); }
+tr.inactive { opacity: .5; }
+.actions { display: flex; gap: .4rem; flex-wrap: wrap; }
+
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: .4rem; }
+.dot.in { background: var(--green); }
+.dot.out { background: var(--muted); }
+.tag { font-size: .7rem; background: var(--panel-2); padding: .15rem .45rem; border-radius: 6px; color: var(--muted); }
+.tag.in { background: rgba(34,197,94,.2); color: var(--green); }
+.tag.warn { background: rgba(251,191,36,.18); color: #fbbf24; }
+.subnote { font-size: .72rem; margin-top: .25rem; }
+.owed-pos { color: #fbbf24; font-weight: 600; }
+
+/* Earned / Paid / Owed stat row on the payments page */
+.stats { display: flex; gap: 1rem; flex-wrap: wrap; }
+.stat { flex: 1; min-width: 120px; background: var(--bg); border-radius: 12px; padding: 1rem; text-align: center; }
+.stat-label { display: block; color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .5px; }
+.stat-val { display: block; font-size: 1.6rem; font-weight: 700; margin-top: .25rem; }
+.stat.owed .stat-val { color: #fbbf24; }
+
+/* Forms */
+.rowform { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; }
+.rowform label { display: flex; flex-direction: column; gap: .35rem; font-size: .9rem; color: var(--muted); }
+.rowform-actions { display: flex; gap: .5rem; }
+input[type=text], input[type=number], input[type=password], input[type=datetime-local], input[type=time] {
+  background: var(--bg); border: 1px solid var(--panel-2); color: var(--text);
+  padding: .65rem .75rem; border-radius: 10px; font-size: 1rem; min-width: 200px;
+}
+input:focus { outline: 2px solid var(--blue); border-color: var(--blue); }
+
+/* Buttons */
+.btn {
+  display: inline-block; border: none; border-radius: 10px; cursor: pointer;
+  padding: .65rem 1rem; font-size: .95rem; font-weight: 600;
+  background: var(--panel-2); color: var(--text); text-decoration: none;
+}
+.btn:active { transform: translateY(1px); }
+.btn.small { padding: .4rem .7rem; font-size: .85rem; }
+.btn.primary { background: var(--blue); }
+.btn.primary:active { background: var(--blue-d); }
+.btn.ghost { background: transparent; border: 1px solid var(--panel-2); }
+.btn.danger { background: var(--red); }
+
+/* Login */
+.login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.card.login { width: min(90vw, 360px); text-align: center; }
+.card.login h1 { margin-top: 0; }
+.card.login input { width: 100%; margin-bottom: 1rem; text-align: center; font-size: 1.25rem; }
+.card.login .btn { width: 100%; }
+
+/* Wraps a wide table so it scrolls on its own instead of widening the page
+   (used on the Summary page, which stays a full table on phones). */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Week-fill navigation (prev / range / next) */
+.weeknav { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: 1rem; }
+.weeknav-label { text-align: center; line-height: 1.3; }
+.weeknav-label strong { display: block; }
+.weeknav-label a { font-size: .85rem; }
+
+/* "ends next day" hint under an overnight shift's end time */
+.overnight { font-size: .7rem; color: var(--blue); margin-top: .25rem; }
+
+/* Multi-shift schedule editor */
+.daysched { border-bottom: 1px solid var(--panel-2); padding: .9rem 0; }
+.daysched:first-child { padding-top: 0; }
+.daysched-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.shiftlist { margin-top: .6rem; display: flex; flex-direction: column; gap: .6rem; }
+.shiftrow { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+.shiftrow label { display: flex; flex-direction: column; gap: .25rem; font-size: .8rem; color: var(--muted); }
+.shiftrow .overnight { margin: 0; }
+.shiftrow .remove { margin-left: auto; }
+.daysched .off { margin: .5rem 0 0; }
+
+/* Flash messages */
+.flash { padding: .75rem 1rem; border-radius: 10px; margin-bottom: 1rem; }
+.flash.error { background: rgba(239,68,68,.15); color: #fca5a5; }
+.flash.ok { background: rgba(34,197,94,.15); color: #86efac; }
+
+/* ===================== TINY SCREENS (e.g. 3.5" 480x320) ===================== */
+@media (max-width: 600px) {
+  .topbar { padding: .5rem 1.3rem .5rem .7rem; gap: .4rem; align-items: center; }
+  .brand { font-size: 1.05rem; }
+  .gear { font-size: 1.9rem; padding: .25rem .6rem; }
+  .clock { font-size: 1.25rem; }
+  .date { font-size: .64rem; }
+  .subline { font-size: .56rem; }
+
+  /* Extra right padding clears the display's overscan so the last card/IP
+     are never cut off. */
+  .kiosk main { padding: .5rem 1.25rem .5rem .6rem; }
+  .prompt { font-size: .95rem; margin: .25rem 0 .6rem; }
+
+  .grid { grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: .5rem; }
+  .namecard { min-height: 100px; padding: .6rem; gap: .25rem; border-width: 2px; border-radius: 12px; }
+  .namecard-name { font-size: 1.25rem; }
+  .namecard-status { font-size: .7rem; }
+  .empty { font-size: .9rem; margin-top: 1.25rem; line-height: 1.4; }
+
+  /* Action sheet */
+  .sheet { width: 94vw; padding: 1rem .9rem; border-radius: 16px; }
+  .sheet-name { font-size: 1.3rem; }
+  .sheet-status { font-size: .8rem; margin: .25rem 0 .75rem; }
+  .bigbtn { padding: .85rem; font-size: 1.2rem; border-radius: 12px; }
+  /* Big gap + bordered button so Cancel is a clearly separate tap target on
+     the resistive touchscreen (hard to mis-tap between it and Clock In). */
+  .cancel {
+    font-size: .9rem; padding: .55rem; margin-top: 2rem;
+    border: 1px solid var(--panel-2); border-radius: 12px;
+  }
+  .checkmark { font-size: 2.4rem; width: 60px; height: 60px; line-height: 60px; }
+  .done-msg { font-size: 1.05rem; }
+
+  /* ---- Admin on a phone ---- */
+  /* Reclaim horizontal space: thinner page/card padding. */
+  .container { padding: .75rem; }
+  .card { padding: 1rem; }
+
+  /* The header bar has too many items for a phone row — let it wrap instead of
+     running off the right edge. */
+  .adminbar { flex-wrap: wrap; gap: .5rem .75rem; padding: .7rem .9rem; }
+  .adminbar .brand { font-size: 1.05rem; }
+  .adminbar .spacer { flex-basis: 100%; height: 0; }
+
+  /* Inputs default to min-width:200px (good on desktop, but two time pickers
+     side by side overflow a phone). Let them shrink to their cell instead. */
+  input[type=text], input[type=number], input[type=password],
+  input[type=datetime-local], input[type=time] { min-width: 0; }
+  .rowform { gap: .75rem; }
+  .rowform label { width: 100%; }
+  .rowform label input { width: 100%; }
+
+  /* Schedule grid: let the Start/End time pickers fill their column so all
+     four columns fit without scrolling sideways. */
+  table.sched { table-layout: fixed; width: 100%; }
+  table.sched th, table.sched td { padding: .55rem .35rem; }
+  table.sched input[type=time] { width: 100%; }
+
+  /* Employees table: 8 columns never fit a phone. Reflow each row into a
+     stacked card with "Label: value" lines, so nothing overflows sideways. */
+  table.employees, table.employees tbody, table.employees tr, table.employees td { display: block; }
+  table.employees thead { display: none; }
+  table.employees tr {
+    border: 1px solid var(--panel-2); border-radius: 12px;
+    padding: .5rem .9rem; margin-bottom: .75rem;
+  }
+  table.employees td {
+    border: none; padding: .35rem 0;
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    text-align: right;
+  }
+  /* Label each value with its column name (carried on the cell's data-label). */
+  table.employees td::before {
+    content: attr(data-label);
+    color: var(--muted); font-weight: 600; font-size: .72rem;
+    text-transform: uppercase; letter-spacing: .5px; text-align: left;
+  }
+  /* The name is the card title: bigger, full width, no label. */
+  table.employees td.name-cell { justify-content: flex-start; font-size: 1.15rem; font-weight: 700; }
+  table.employees td.name-cell::before { display: none; }
+  /* Actions become a left-aligned button cluster, no label. */
+  table.employees td.actions { justify-content: flex-start; flex-wrap: wrap; gap: .4rem; }
+  table.employees td.actions::before { display: none; }
+}

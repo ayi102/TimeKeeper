@@ -1,0 +1,5 @@
+# Start the real LXDE desktop (panel + file-manager desktop) so that exiting
+# the kiosk drops to a usable desktop. The kiosk runs full-screen over them.
+@lxpanel --profile LXDE-pi
+@pcmanfm --desktop --profile LXDE-pi
+bash /home/ayi102/TimeKeeper/deploy/kiosk.sh

@@ -1,0 +1,11 @@
+[Unit]
+Description=TimeKeeper daily hours summary + database backup email
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ayi102
+WorkingDirectory=/home/ayi102/TimeKeeper
+EnvironmentFile=/home/ayi102/TimeKeeper/deploy/mail.env
+ExecStart=/home/ayi102/TimeKeeper/.venv/bin/python summary_email.py --this-week

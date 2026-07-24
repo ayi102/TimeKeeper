@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>TimeKeeper</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="kiosk">
+  <header class="topbar">
+    <div class="brand">TimeKeeper <span class="byline">by ayi102</span></div>
+    <a class="gear" href="{{ url_for('settings') }}" title="Settings" aria-label="Settings">⚙</a>
+    <div class="topright">
+      <div class="clock" id="liveClock">--:--</div>
+      <div class="date" id="liveDate"></div>
+      <div class="subline">IP <strong>{{ ip }}</strong></div>
+    </div>
+  </header>
+
+  <main>
+    <h1 class="prompt">Tap your name to clock in or out</h1>
+
+    {% if workers %}
+    <div class="grid">
+      {% for w in workers %}
+      <button class="namecard {{ 'is-in' if w.clocked_in else 'is-out' }}"
+              data-id="{{ w.id }}" data-name="{{ w.name }}"
+              onclick="openWorker(this)">
+        <span class="namecard-name">{{ w.name }}</span>
+        <span class="namecard-status">{{ 'Clocked In' if w.clocked_in else 'Clocked Out' }}</span>
+      </button>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">No workers yet. Add them from the admin page:
+       <strong>{{ ip }}/admin</strong></p>
+    {% endif %}
+  </main>
+
+  <!-- Action overlay -->
+  <div class="overlay" id="overlay" hidden>
+    <div class="sheet" id="sheet">
+      <div class="sheet-stage" id="stageAction">
+        <div class="sheet-name" id="sheetName"></div>
+        <div class="sheet-status" id="sheetStatus"></div>
+        <button class="bigbtn" id="actionBtn" onclick="doClock()"></button>
+        <button class="cancel" onclick="closeOverlay()">Cancel</button>
+      </div>
+      <div class="sheet-stage" id="stageDone" hidden>
+        <div class="checkmark" id="doneIcon">✓</div>
+        <div class="done-msg" id="doneMsg"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

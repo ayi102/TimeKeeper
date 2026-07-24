@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ emp.name }} · Entries</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=2) }}">
+</head>
+<body class="admin">
+  <header class="adminbar">
+    <a class="btn ghost" href="{{ url_for('admin') }}">← Back</a>
+    <span class="brand">{{ emp.name }} · Time Entries</span>
+    <span class="spacer"></span>
+  </header>
+
+  <main class="container">
+    {% with msgs = get_flashed_messages(with_categories=true) %}
+      {% for cat, m in msgs %}<p class="flash {{ cat }}">{{ m }}</p>{% endfor %}
+    {% endwith %}
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Fill a Week</h2>
+        <a class="btn primary" href="{{ url_for('employee_week', emp_id=emp.id) }}">Open week view →</a>
+      </div>
+      <p class="muted">Enter or adjust a whole week at once, pre-filled from {{ emp.name }}'s schedule.</p>
+    </section>
+
+    <section class="card">
+      <h2>Add / Edit Entry</h2>
+      <form method="post" action="{{ url_for('save_entry') }}" class="rowform">
+        <input type="hidden" name="id" id="entryId">
+        <input type="hidden" name="employee_id" value="{{ emp.id }}">
+        <label>Clock in<input type="datetime-local" name="clock_in" id="entryIn" required></label>
+        <label>Clock out<input type="datetime-local" name="clock_out" id="entryOut"></label>
+        <div class="rowform-actions">
+          <button type="submit" class="btn primary">Save</button>
+          <button type="button" class="btn ghost" onclick="resetEntry()">Clear</button>
+        </div>
+      </form>
+      <p class="muted">Leave clock-out empty to mark the worker as still clocked in.</p>
+    </section>
+
+    <section class="card">
+      <h2>History</h2>
+      <table class="data">
+        <thead><tr><th>Clock In</th><th>Clock Out</th><th>Hours</th><th></th></tr></thead>
+        <tbody>
+          {% for e in entries %}
+          <tr>
+            <td>{{ e.clock_in|fmt_dt }}
+              {% if e.actual_in %}<div class="subnote muted">tapped {{ e.actual_in|fmt_time }}</div>{% endif %}
+            </td>
+            <td>
+              {% if e.open %}<span class="tag in">still in</span>
+              {% else %}{{ e.clock_out|fmt_dt }}
+                {% if e.actual_out %}<div class="subnote muted">tapped {{ e.actual_out|fmt_time }}</div>{% endif %}
+                {% if e.needs_review %}<div class="subnote"><span class="tag warn">no clock-out — review</span></div>{% endif %}
+              {% endif %}
+            </td>
+            <td>{{ e.hours }}</td>
+            <td class="actions">
+              <button class="btn small" type="button"
+                      onclick="editEntry({{ e.id }}, '{{ e.clock_in }}', '{{ e.clock_out or '' }}')">Edit</button>
+              <form method="post" action="{{ url_for('delete_entry', entry_id=e.id) }}"
+                    style="display:inline" onsubmit="return confirm('Delete this entry?')">
+                <button class="btn small danger" type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="muted">No entries yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <script>
+    // Stored ISO strings include seconds; datetime-local wants minute precision.
+    function trim(iso) { return iso ? iso.slice(0, 16) : ''; }
+    function editEntry(id, cin, cout) {
+      document.getElementById('entryId').value = id;
+      document.getElementById('entryIn').value = trim(cin);
+      document.getElementById('entryOut').value = trim(cout);
+      window.scrollTo({top: 0, behavior: 'smooth'});
+    }
+    function resetEntry() {
+      document.getElementById('entryId').value = '';
+      document.getElementById('entryIn').value = '';
+      document.getElementById('entryOut').value = '';
+    }
+  </script>
+</body>
+</html>

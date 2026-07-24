@@ -1,15 +1,32 @@
+# ===== Android =====
 *.iml
 .gradle
+/build
+/captures
 /local.properties
+local.properties
+.externalNativeBuild
+.cxx
+.DS_Store
 /.idea/caches
 /.idea/libraries
 /.idea/modules.xml
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
+
+# ===== Python / Pi (under pi/) =====
+.venv/
+__pycache__/
+*.pyc
+cookies.txt
+deploy/mail.env
+deploy/timekeeper.env
+pi/deploy/mail.env
+pi/deploy/timekeeper.env
+
+# ===== Data & backups: never commit =====
+*.db
+*.db.gz
+timekeeper.db
+backups/
