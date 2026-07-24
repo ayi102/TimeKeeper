@@ -21,6 +21,8 @@
     .btn { border:none; border-radius:8px; cursor:pointer; padding:.65rem 1rem; font-size:.95rem; font-weight:600; background:var(--panel-2); color:var(--text); text-decoration:none; }
     .btn.primary { background:var(--blue); }
     .btn.ghost { background:transparent; border:1px solid var(--panel-2); }
+    .btn.danger { background:#dc2626; }
+    input[type=file] { width:100%; margin-top:.3rem; color:var(--text); font-size:.95rem; }
     .hint { color:var(--muted); font-size:.85rem; margin-top:.5rem; }
     .status { font-size:.9rem; margin-top:.75rem; min-height:1.2em; }
     .status.ok { color:#86efac; } .status.err { color:#fca5a5; }
@@ -56,6 +58,16 @@
         <button class="btn" id="test">Send backup email now</button>
       </div>
       <div class="status" id="testStatus"></div>
+    </div>
+
+    <div class="card">
+      <h2>Restore</h2>
+      <p class="hint" style="margin-top:0"><strong>Replaces ALL data on the tablet</strong> with a backup file (a <strong>.db.gz</strong> from a backup email, or a <strong>.db</strong>). Use it to load existing data, or to recover onto a new tablet. Best done from a computer or phone browser (the file must be on that device).</p>
+      <input type="file" id="restoreFile" accept=".gz,.db,application/gzip,application/octet-stream">
+      <div class="actions" style="margin-top:.7rem">
+        <button class="btn danger" id="restore">Restore from file</button>
+      </div>
+      <div class="status" id="restoreStatus"></div>
     </div>
 
     <div class="card">
@@ -107,6 +119,19 @@
     document.getElementById("exit").addEventListener("click", function () {
       if (window.Android && window.Android.exitKiosk) window.Android.exitKiosk();
       else setStatus("exitStatus", "Only works on the tablet running the app.", false);
+    });
+
+    document.getElementById("restore").addEventListener("click", function () {
+      var f = document.getElementById("restoreFile").files[0];
+      if (!f) { setStatus("restoreStatus", "Choose a backup file first.", false); return; }
+      if (!confirm("Replace ALL data on the tablet with this file?\nThis cannot be undone.")) return;
+      setStatus("restoreStatus", "Restoring…", true);
+      var fd = new FormData();
+      fd.append("file", f);
+      fetch("/admin/restore", { method: "POST", body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (res) { setStatus("restoreStatus", res.message || (res.ok ? "Restored." : "Failed."), res.ok); })
+        .catch(function () { setStatus("restoreStatus", "Restore failed.", false); });
     });
   </script>
 </body>

@@ -8,6 +8,7 @@ import com.ayi102.timekeeper.core.Times
 import fi.iki.elonen.NanoHTTPD
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.util.UUID
 
 /**
@@ -23,6 +24,11 @@ class Server(
 
     private val adminPin = "1234"                  // TODO: make configurable
     private val token = UUID.randomUUID().toString()
+
+    init {
+        // Keep multipart uploads (restore) in the app cache; java.io.tmpdir may not be writable.
+        setTempFileManagerFactory { CacheTempFileManager(context.cacheDir) }
+    }
 
     private fun authed(s: IHTTPSession): Boolean = s.cookies.read("tk_auth") == token
 
@@ -156,6 +162,23 @@ class Server(
                     json(JSONObject().put("ok", false).put("message", (e.message ?: "Send failed.")).toString())
                 }
             }
+            post && uri == "/admin/restore" -> guard(session) {
+                try {
+                    val files = HashMap<String, String>()
+                    session.parseBody(files)
+                    val tmp = files["file"]
+                    if (tmp == null) {
+                        json(JSONObject().put("ok", false).put("message", "No file received.").toString())
+                    } else {
+                        var bytes = File(tmp).readBytes()
+                        if (bytes.size > 2 && bytes[0] == 0x1f.toByte() && bytes[1] == 0x8b.toByte())
+                            bytes = java.util.zip.GZIPInputStream(bytes.inputStream()).use { it.readBytes() }
+                        json(JSONObject().put("ok", true).put("message", db.restoreFrom(bytes)).toString())
+                    }
+                } catch (e: Exception) {
+                    json(JSONObject().put("ok", false).put("message", (e.message ?: "Restore failed.")).toString())
+                }
+            }
 
             else -> newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "Not found")
         }
@@ -241,4 +264,24 @@ class Server(
 
     private fun html(body: String): Response = newFixedLengthResponse(Response.Status.OK, "text/html", body)
     private fun json(body: String): Response = newFixedLengthResponse(Response.Status.OK, "application/json", body)
+}
+
+/** Keeps NanoHTTPD's multipart temp files in a directory we control (the app cache). */
+private class CacheTempFileManager(private val dir: File) : NanoHTTPD.TempFileManager {
+    private val files = ArrayList<NanoHTTPD.TempFile>()
+    init { dir.mkdirs() }
+    override fun createTempFile(filenameHint: String?): NanoHTTPD.TempFile =
+        CacheTempFile(dir).also { files.add(it) }
+    override fun clear() {
+        for (f in files) try { f.delete() } catch (_: Exception) {}
+        files.clear()
+    }
+}
+
+private class CacheTempFile(dir: File) : NanoHTTPD.TempFile {
+    private val file = File.createTempFile("nano-upload-", ".tmp", dir)
+    private val out = java.io.FileOutputStream(file)
+    override fun open(): java.io.OutputStream = out
+    override fun delete() { try { out.close() } catch (_: Exception) {}; file.delete() }
+    override fun getName(): String = file.absolutePath
 }

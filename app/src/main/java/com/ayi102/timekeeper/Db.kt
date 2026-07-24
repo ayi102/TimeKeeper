@@ -100,6 +100,30 @@ class Db(private val ctx: Context) : SQLiteOpenHelper(ctx, "timekeeper.db", null
         return bos.toByteArray()
     }
 
+    /**
+     * Replace the entire database with [dbBytes] (a raw SQLite file, e.g. from a
+     * backup). Returns a short summary. Stamps user_version to match this helper
+     * so it reopens as an existing DB (no onCreate/onUpgrade, no re-seed).
+     */
+    fun restoreFrom(dbBytes: ByteArray): String {
+        require(dbBytes.size >= 16 && String(dbBytes, 0, 15, Charsets.US_ASCII) == "SQLite format 3") {
+            "That file is not a SQLite database."
+        }
+        close()  // drop the open connection before swapping the file
+        val dbFile = ctx.getDatabasePath("timekeeper.db")
+        dbFile.parentFile?.mkdirs()
+        dbFile.writeBytes(dbBytes)
+        java.io.File(dbFile.path + "-wal").delete()
+        java.io.File(dbFile.path + "-shm").delete()
+        java.io.File(dbFile.path + "-journal").delete()
+        SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READWRITE).use { raw ->
+            raw.execSQL("PRAGMA user_version = 1")
+        }
+        val db = readableDatabase
+        fun count(t: String) = db.rawQuery("SELECT count(*) FROM $t", null).use { it.moveToFirst(); it.getInt(0) }
+        return "Restored ${count("employees")} workers, ${count("time_entries")} time entries, ${count("payments")} payments."
+    }
+
     private fun seed(db: SQLiteDatabase) {
         fun emp(name: String, rate: Double): Long =
             db.insert("employees", null, ContentValues().apply {
