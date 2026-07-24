@@ -67,7 +67,7 @@
       <table>
         <thead>
           <tr><th>Name</th><th class="num">Hours</th><th class="num">Earned</th>
-              <th class="num">Paid</th><th class="num">Owed</th><th class="num">Tips</th></tr>
+              <th class="num">Paid</th><th class="num">Owed</th><th class="num">Tips</th><th></th></tr>
         </thead>
         <tbody id="sumRows"></tbody>
         <tfoot><tr id="sumTotals"></tr></tfoot>
@@ -154,7 +154,8 @@
             '<td class="num">' + money(e.pay) + "</td>" +
             '<td class="num">' + money(e.paid) + "</td>" +
             '<td class="num owed">' + money(e.owed) + "</td>" +
-            '<td class="num">' + money(e.tips) + "</td>";
+            '<td class="num">' + money(e.tips) + "</td>" +
+            '<td style="text-align:right"><a class="btn primary" href="/admin/payments?emp=' + e.id + '">Pay Out</a></td>';
           rows.appendChild(tr);
         });
         document.getElementById("sumTotals").innerHTML =
@@ -163,7 +164,8 @@
           '<td class="num">' + money(t.pay) + "</td>" +
           '<td class="num">' + money(t.paid) + "</td>" +
           '<td class="num">' + money(t.owed) + "</td>" +
-          '<td class="num">' + money(t.tips) + "</td>";
+          '<td class="num">' + money(t.tips) + "</td>" +
+          "<td></td>";
       });
     }
 

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TimeKeeper · Payments</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#1e293b; --panel-2:#334155; --text:#f1f5f9; --muted:#94a3b8; --green:#22c55e; --blue:#3b82f6; --red:#ef4444; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-height:100%; }
+    body { font-family:-apple-system,"Roboto",sans-serif; background:var(--bg); color:var(--text); }
+    .bar { display:flex; align-items:center; gap:1rem; padding:1rem 1.25rem; background:var(--panel); border-bottom:1px solid var(--panel-2); }
+    .brand { font-weight:700; font-size:1.1rem; }
+    main { padding:1rem 1.25rem; max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:1.25rem; }
+    .card { background:var(--panel); border-radius:14px; padding:1rem 1.25rem; }
+    h2 { margin:.2rem 0 1rem; font-size:1.1rem; }
+    .stats { display:flex; gap:1rem; flex-wrap:wrap; }
+    .stat { flex:1; min-width:110px; background:var(--bg); border-radius:12px; padding:1rem; text-align:center; }
+    .stat .label { display:block; color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.5px; }
+    .stat .val { display:block; font-size:1.5rem; font-weight:700; margin-top:.25rem; }
+    .stat.owed .val { color:#fbbf24; }
+    .form { display:flex; gap:.75rem; align-items:flex-end; flex-wrap:wrap; }
+    .form label { display:flex; flex-direction:column; gap:.3rem; font-size:.8rem; color:var(--muted); }
+    .form input { background:var(--bg); border:1px solid var(--panel-2); color:var(--text); padding:.6rem .7rem; border-radius:8px; font-size:1rem; }
+    .form input[type=number] { width:120px; }
+    .hint { color:var(--muted); font-size:.85rem; margin-top:.75rem; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { text-align:left; padding:.6rem .5rem; border-bottom:1px solid var(--panel-2); }
+    th { color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.5px; }
+    td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+    .btn { border:none; border-radius:8px; cursor:pointer; padding:.55rem .9rem; font-size:.9rem; font-weight:600; background:var(--panel-2); color:var(--text); text-decoration:none; }
+    .btn.primary { background:var(--blue); }
+    .btn.ghost { background:transparent; border:1px solid var(--panel-2); }
+    .btn.danger { background:var(--red); font-size:.8rem; padding:.4rem .7rem; }
+    .status { color:var(--muted); font-size:.9rem; margin-top:.75rem; min-height:1.2em; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <a href="/admin" class="btn ghost">← Admin</a>
+    <span class="brand" id="title">Payments</span>
+  </div>
+  <main>
+    <div class="card">
+      <div class="stats">
+        <div class="stat"><span class="label">Earned</span><span class="val" id="earned">$0.00</span></div>
+        <div class="stat"><span class="label">Paid</span><span class="val" id="paid">$0.00</span></div>
+        <div class="stat owed"><span class="label">Owed</span><span class="val" id="owed">$0.00</span></div>
+        <div class="stat"><span class="label">Tips</span><span class="val" id="tips">$0.00</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Record a payout</h2>
+      <div class="form">
+        <label>Pay ($)<input type="number" id="amount" min="0" step="0.01" value="0.00"></label>
+        <label>Tip ($)<input type="number" id="tip" min="0" step="0.01" value="0.00"></label>
+        <label>Note<input type="text" id="note" placeholder="e.g. cash, check #123"></label>
+        <button class="btn primary" id="pay">Mark Paid</button>
+      </div>
+      <p class="hint">
+        Owed is rounded up to the whole dollar and Pay defaults to it. Tip is extra and doesn't
+        affect what's owed. Paying more than the exact balance (including those rounded-up cents)
+        is recorded as a tip, so the balance never goes negative.
+      </p>
+      <div class="status" id="status"></div>
+    </div>
+
+    <div class="card">
+      <h2>History</h2>
+      <table>
+        <thead><tr><th>Date</th><th class="num">Pay</th><th class="num">Tip</th><th>Note</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    var emp = new URLSearchParams(location.search).get("emp");
+    function money(n) { return "$" + Number(n).toFixed(2); }
+
+    function load() {
+      fetch("/api/payments?emp=" + emp).then(function (r) { return r.json(); }).then(function (d) {
+        if (!d.ok) { document.getElementById("status").textContent = "Could not load."; return; }
+        document.getElementById("title").textContent = d.name + " · Payments";
+        document.getElementById("earned").textContent = money(d.earned);
+        document.getElementById("paid").textContent = money(d.paid);
+        document.getElementById("owed").textContent = money(d.owed);
+        document.getElementById("tips").textContent = money(d.tips);
+        document.getElementById("amount").value = Number(d.owed).toFixed(2);
+        var rows = document.getElementById("rows");
+        rows.innerHTML = "";
+        (d.history || []).forEach(function (p) {
+          var when = new Date(p.paidAt).toLocaleString(undefined, { month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
+          var tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td>" + when + "</td>" +
+            '<td class="num">' + money(p.amount) + "</td>" +
+            '<td class="num">' + (p.tip ? money(p.tip) : "—") + "</td>" +
+            "<td></td>" +
+            '<td style="text-align:right"><button class="btn danger">Delete</button></td>';
+          tr.children[3].textContent = p.note || "";
+          tr.querySelector("button").onclick = function () { del(p.id); };
+          rows.appendChild(tr);
+        });
+      }).catch(function () { document.getElementById("status").textContent = "Could not load."; });
+    }
+
+    function pay() {
+      var amount = document.getElementById("amount").value || "0";
+      var tip = document.getElementById("tip").value || "0";
+      var note = encodeURIComponent(document.getElementById("note").value.trim());
+      fetch("/admin/payout?emp=" + emp + "&amount=" + amount + "&tip=" + tip + "&note=" + note, { method: "POST" })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (!res.ok) { document.getElementById("status").textContent = res.message || "Could not record."; return; }
+          document.getElementById("tip").value = "0.00";
+          document.getElementById("note").value = "";
+          document.getElementById("status").textContent = "Payout recorded.";
+          load();
+        })
+        .catch(function () { document.getElementById("status").textContent = "Could not record — try logging in again."; });
+    }
+
+    function del(id) {
+      if (!confirm("Delete this payment?")) return;
+      fetch("/admin/payment/delete?id=" + id, { method: "POST" }).then(function () { load(); });
+    }
+
+    document.getElementById("pay").addEventListener("click", pay);
+    load();
+  </script>
+</body>
+</html>

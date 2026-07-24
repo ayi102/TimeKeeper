@@ -1,6 +1,7 @@
 package com.ayi102.timekeeper
 
 import android.content.res.AssetManager
+import com.ayi102.timekeeper.core.Money
 import com.ayi102.timekeeper.core.Scheduling
 import com.ayi102.timekeeper.core.Shift
 import com.ayi102.timekeeper.core.Times
@@ -76,6 +77,52 @@ class Server(
                 if (emp == null) json(JSONObject().put("ok", false).toString())
                 else json(saveSchedule(emp, session.parameters["shifts"]?.firstOrNull() ?: "[]"))
             }
+
+            session.method == Method.GET && uri == "/admin/payments" ->
+                html(asset(if (authed(session)) "payments.html" else "login.html"))
+
+            session.method == Method.GET && uri == "/api/payments" -> guard(session) {
+                val emp = session.parameters["emp"]?.firstOrNull()?.toLongOrNull()
+                val f = if (emp != null) db.financeFor(emp, Times.now()) else null
+                if (f == null) json(JSONObject().put("ok", false).toString())
+                else {
+                    val hist = JSONArray()
+                    for (p in db.payments(emp!!)) {
+                        hist.put(
+                            JSONObject().put("id", p.id).put("paidAt", p.paidAt)
+                                .put("amount", p.amount).put("tip", p.tip).put("note", p.note)
+                        )
+                    }
+                    json(
+                        JSONObject().put("ok", true).put("name", f.name)
+                            .put("earned", f.earned).put("paid", f.paid).put("owed", f.owedDue)
+                            .put("tips", f.tips).put("history", hist).toString()
+                    )
+                }
+            }
+
+            session.method == Method.POST && uri == "/admin/payout" -> guard(session) {
+                val emp = session.parameters["emp"]?.firstOrNull()?.toLongOrNull()
+                val f = if (emp != null) db.financeFor(emp, Times.now()) else null
+                val amount = money(session, "amount")
+                val tip = money(session, "tip")
+                val note = session.parameters["note"]?.firstOrNull()?.trim().orEmpty()
+                when {
+                    f == null -> json(JSONObject().put("ok", false).put("message", "Unknown worker.").toString())
+                    amount + tip <= 0.0 -> json(JSONObject().put("ok", false).put("message", "Enter a pay or tip amount.").toString())
+                    else -> {
+                        val (pay, finalTip) = Money.splitPayout(amount, tip, f.owed)
+                        db.addPayment(emp!!, pay, finalTip, note)
+                        json(JSONObject().put("ok", true).toString())
+                    }
+                }
+            }
+
+            session.method == Method.POST && uri == "/admin/payment/delete" -> guard(session) {
+                val id = session.parameters["id"]?.firstOrNull()?.toLongOrNull()
+                if (id != null) db.deletePayment(id)
+                json(JSONObject().put("ok", id != null).toString())
+            }
             session.method == Method.GET && uri == "/api/summary" ->
                 if (authed(session)) json(summaryJson()) else unauthorized()
 
@@ -129,7 +176,7 @@ class Server(
         for (s in db.summarize(Times.now())) {
             arr.put(
                 JSONObject()
-                    .put("name", s.name).put("hours", s.hours).put("pay", s.pay)
+                    .put("id", s.id).put("name", s.name).put("hours", s.hours).put("pay", s.pay)
                     .put("paid", s.paid).put("owed", s.owedDue).put("tips", s.tips)
             )
         }
@@ -141,6 +188,9 @@ class Server(
 
     private fun unauthorized(): Response =
         newFixedLengthResponse(Response.Status.UNAUTHORIZED, MIME_PLAINTEXT, "auth required")
+
+    private fun money(s: IHTTPSession, field: String): Double =
+        s.parameters[field]?.firstOrNull()?.toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0
 
     private fun employeesJson(): String {
         val arr = JSONArray()

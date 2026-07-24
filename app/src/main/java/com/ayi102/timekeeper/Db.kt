@@ -18,12 +18,21 @@ data class OpenEntry(val id: Long, val clockIn: String)
 
 /** Per-worker rollup for the admin summary. */
 data class Summary(
-    val name: String, val hours: Double, val pay: Double,
+    val id: Long, val name: String, val hours: Double, val pay: Double,
     val paid: Double, val owed: Double, val owedDue: Double, val tips: Double,
 )
 
 /** A worker as shown on the admin management list. */
 data class EmpAdmin(val id: Long, val name: String, val rate: Double, val active: Boolean)
+
+/** One recorded payout. */
+data class Payment(val id: Long, val paidAt: String, val amount: Double, val tip: Double, val note: String)
+
+/** Money state for one worker (for the payouts screen). */
+data class Finance(
+    val name: String, val earned: Double, val paid: Double,
+    val owed: Double, val owedDue: Double, val tips: Double,
+)
 
 /**
  * Built-in SQLite storage (no Room / no annotation processors). Schema mirrors
@@ -194,8 +203,56 @@ class Db(context: Context) : SQLiteOpenHelper(context, "timekeeper.db", null, 1)
             val pay = Money.pay(hours, e.rate)
             val paid = Money.round2(paidM[e.id] ?: 0.0)
             val owed = Money.round2(pay - paid)
-            Summary(e.name, hours, pay, paid, owed, Money.owedDue(owed), Money.round2(tipM[e.id] ?: 0.0))
+            Summary(e.id, e.name, hours, pay, paid, owed, Money.owedDue(owed), Money.round2(tipM[e.id] ?: 0.0))
         }
+    }
+
+    /** Money state for a single worker. */
+    fun financeFor(empId: Long, now: LocalDateTime): Finance? {
+        var name: String? = null; var rate = 0.0
+        readableDatabase.rawQuery("SELECT name, hourly_rate FROM employees WHERE id = ?", arrayOf(empId.toString())).use { c ->
+            if (c.moveToFirst()) { name = c.getString(0); rate = c.getDouble(1) }
+        }
+        if (name == null) return null
+        var secs = 0.0
+        readableDatabase.rawQuery("SELECT clock_in, clock_out FROM time_entries WHERE employee_id = ?", arrayOf(empId.toString())).use { c ->
+            while (c.moveToNext()) {
+                val start = Times.parse(c.getString(0))
+                val end = if (c.isNull(1)) now else Times.parse(c.getString(1))
+                secs += Duration.between(start, end).seconds.toDouble().coerceAtLeast(0.0)
+            }
+        }
+        var paid = 0.0; var tips = 0.0
+        readableDatabase.rawQuery("SELECT amount, tip FROM payments WHERE employee_id = ?", arrayOf(empId.toString())).use { c ->
+            while (c.moveToNext()) { paid += c.getDouble(0); tips += c.getDouble(1) }
+        }
+        val hours = Money.hours(secs)
+        val pay = Money.pay(hours, rate)
+        val owed = Money.round2(pay - Money.round2(paid))
+        return Finance(name!!, pay, Money.round2(paid), owed, Money.owedDue(owed), Money.round2(tips))
+    }
+
+    fun payments(empId: Long): List<Payment> {
+        val out = ArrayList<Payment>()
+        readableDatabase.rawQuery(
+            "SELECT id, paid_at, amount, tip, COALESCE(note,'') FROM payments WHERE employee_id = ? ORDER BY paid_at DESC",
+            arrayOf(empId.toString())
+        ).use { c ->
+            while (c.moveToNext())
+                out.add(Payment(c.getLong(0), c.getString(1), c.getDouble(2), c.getDouble(3), c.getString(4)))
+        }
+        return out
+    }
+
+    fun addPayment(empId: Long, amount: Double, tip: Double, note: String) {
+        writableDatabase.insert("payments", null, ContentValues().apply {
+            put("employee_id", empId); put("amount", amount); put("tip", tip)
+            put("paid_at", Times.format(Times.now())); put("note", note)
+        })
+    }
+
+    fun deletePayment(id: Long) {
+        writableDatabase.delete("payments", "id = ?", arrayOf(id.toString()))
     }
 
     fun name(empId: Long): String? =
