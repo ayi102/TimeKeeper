@@ -10,6 +10,7 @@ import com.ayi102.timekeeper.core.Times
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 
 /** A worker shown on the kiosk. */
 data class Emp(val id: Long, val name: String, val clockedIn: Boolean)
@@ -38,12 +39,21 @@ data class Finance(
     val owed: Double, val owedDue: Double, val tips: Double,
 )
 
+/** One scheduled dose: a weekday (0=Mon..6=Sun) and a time ("HH:MM"). */
+data class MedSlot(val weekday: Int, val time: String)
+
+/** A medication and the weekday/time slots it should be given on. */
+data class Med(val id: Long, val name: String, val dose: String, val active: Boolean, val slots: List<MedSlot>)
+
+/** A medication whose scheduled time just arrived (for the kiosk reminder). */
+data class DueMed(val name: String, val dose: String)
+
 /**
  * Built-in SQLite storage (no Room / no annotation processors). Schema mirrors
  * the Python app: clock_out NULL means still clocked in; actual_in/out hold the
  * raw taps; a weekday may have several schedule rows; tips are separate.
  */
-class Db(private val ctx: Context) : SQLiteOpenHelper(ctx, "timekeeper.db", null, 1) {
+class Db(private val ctx: Context) : SQLiteOpenHelper(ctx, "timekeeper.db", null, 3) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -87,11 +97,50 @@ class Db(private val ctx: Context) : SQLiteOpenHelper(ctx, "timekeeper.db", null
                  sent_at TEXT NOT NULL,
                  UNIQUE(employee_id, shift_date))"""
         )
+        createMedTables(db)
         seed(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Fresh app for now; real migrations arrive with later phases.
+        // v2 added the medication-reminder tables; v3 added per-weekday scheduling.
+        if (oldVersion < 2) createMedTables(db)
+        if (oldVersion < 3) ensureWeekdayColumn(db)
+    }
+
+    /** Medication schedule + per-day "already reminded" dedup. Idempotent (IF NOT EXISTS). */
+    private fun createMedTables(db: SQLiteDatabase) {
+        db.execSQL(
+            """CREATE TABLE IF NOT EXISTS medications (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 name TEXT NOT NULL,
+                 dose TEXT NOT NULL DEFAULT '',
+                 active INTEGER NOT NULL DEFAULT 1)"""
+        )
+        db.execSQL(
+            """CREATE TABLE IF NOT EXISTS med_times (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 medication_id INTEGER NOT NULL,
+                 weekday INTEGER NOT NULL DEFAULT 0,
+                 time_of_day TEXT NOT NULL)"""
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_medtime_med ON med_times(medication_id)")
+        db.execSQL(
+            """CREATE TABLE IF NOT EXISTS med_fired (
+                 med_time_id INTEGER NOT NULL,
+                 fired_date TEXT NOT NULL,
+                 UNIQUE(med_time_id, fired_date))"""
+        )
+    }
+
+    /** Add the weekday column to a med_times table created before v3 (a no-op otherwise). */
+    private fun ensureWeekdayColumn(db: SQLiteDatabase) {
+        val hasWeekday = db.rawQuery("PRAGMA table_info(med_times)", null).use { c ->
+            var found = false
+            while (c.moveToNext()) if (c.getString(1) == "weekday") { found = true; break }
+            found
+        }
+        if (!hasWeekday)
+            db.execSQL("ALTER TABLE med_times ADD COLUMN weekday INTEGER NOT NULL DEFAULT 0")
     }
 
     /** A gzipped, consistent snapshot of the whole database (for the backup email). */
@@ -121,7 +170,11 @@ class Db(private val ctx: Context) : SQLiteOpenHelper(ctx, "timekeeper.db", null
         java.io.File(dbFile.path + "-shm").delete()
         java.io.File(dbFile.path + "-journal").delete()
         SQLiteDatabase.openDatabase(dbFile.path, null, SQLiteDatabase.OPEN_READWRITE).use { raw ->
-            raw.execSQL("PRAGMA user_version = 1")
+            // A backup may predate v2 (no med tables) — add them, then stamp the
+            // current version so it reopens without onCreate/onUpgrade or a re-seed.
+            createMedTables(raw)
+            ensureWeekdayColumn(raw)
+            raw.execSQL("PRAGMA user_version = 3")
         }
         val db = readableDatabase
         fun count(t: String) = db.rawQuery("SELECT count(*) FROM $t", null).use { it.moveToFirst(); it.getInt(0) }
@@ -455,5 +508,108 @@ class Db(private val ctx: Context) : SQLiteOpenHelper(ctx, "timekeeper.db", null
         writableDatabase.update("time_entries", ContentValues().apply {
             put("clock_out", clockOut); put("actual_out", actualOut)
         }, "id = ?", arrayOf(id.toString()))
+    }
+
+    // ----- medication reminders -----
+
+    /** All medications (active first) with their weekday/time slots. */
+    fun meds(): List<Med> {
+        val db = readableDatabase
+        val slotsByMed = HashMap<Long, MutableList<MedSlot>>()
+        db.rawQuery("SELECT medication_id, weekday, time_of_day FROM med_times ORDER BY weekday, time_of_day", null).use { c ->
+            while (c.moveToNext())
+                slotsByMed.getOrPut(c.getLong(0)) { arrayListOf() }.add(MedSlot(c.getInt(1), c.getString(2)))
+        }
+        val out = ArrayList<Med>()
+        db.rawQuery(
+            "SELECT id, name, dose, active FROM medications ORDER BY active DESC, name COLLATE NOCASE", null
+        ).use { c ->
+            while (c.moveToNext()) {
+                val id = c.getLong(0)
+                out.add(Med(id, c.getString(1), c.getString(2), c.getInt(3) == 1, slotsByMed[id] ?: emptyList()))
+            }
+        }
+        return out
+    }
+
+    /** Add or update a medication and replace its schedule slots. Returns the med id. */
+    fun saveMed(id: Long?, name: String, dose: String, slots: List<MedSlot>): Long {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val medId = if (id != null) {
+                db.update("medications", ContentValues().apply { put("name", name); put("dose", dose) },
+                    "id = ?", arrayOf(id.toString()))
+                id
+            } else {
+                db.insert("medications", null, ContentValues().apply {
+                    put("name", name); put("dose", dose)
+                })
+            }
+            // Slots get new ids, so clear stale "fired" rows keyed on the old ones.
+            db.delete("med_fired", "med_time_id IN (SELECT id FROM med_times WHERE medication_id = ?)", arrayOf(medId.toString()))
+            db.delete("med_times", "medication_id = ?", arrayOf(medId.toString()))
+            for (s in slots) db.insert("med_times", null, ContentValues().apply {
+                put("medication_id", medId); put("weekday", s.weekday); put("time_of_day", s.time)
+            })
+            db.setTransactionSuccessful()
+            return medId
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun setMedActive(id: Long, active: Boolean) {
+        writableDatabase.update("medications", ContentValues().apply {
+            put("active", if (active) 1 else 0)
+        }, "id = ?", arrayOf(id.toString()))
+    }
+
+    fun deleteMed(id: Long) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete("med_fired", "med_time_id IN (SELECT id FROM med_times WHERE medication_id = ?)", arrayOf(id.toString()))
+            db.delete("med_times", "medication_id = ?", arrayOf(id.toString()))
+            db.delete("medications", "id = ?", arrayOf(id.toString()))
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    /**
+     * Medications whose scheduled time just arrived and haven't been reminded yet
+     * today. A time is "due" for a 90-second window after it passes (tolerating the
+     * kiosk's poll gap); the first call in that window records it in med_fired so it
+     * fires exactly once per day.
+     */
+    fun medsDue(now: LocalDateTime): List<DueMed> {
+        val db = writableDatabase
+        val today = now.toLocalDate().toString()
+        val weekday = now.dayOfWeek.value - 1   // 0=Mon..6=Sun
+        data class Cand(val timeId: Long, val name: String, val dose: String, val time: String)
+        val cands = ArrayList<Cand>()
+        db.rawQuery(
+            """SELECT mt.id, m.name, m.dose, mt.time_of_day
+                 FROM med_times mt JOIN medications m ON m.id = mt.medication_id
+                 WHERE m.active = 1 AND mt.weekday = ?""", arrayOf(weekday.toString())
+        ).use { c ->
+            while (c.moveToNext()) cands.add(Cand(c.getLong(0), c.getString(1), c.getString(2), c.getString(3)))
+        }
+        val due = ArrayList<DueMed>()
+        for (cand in cands) {
+            val sched = try {
+                LocalDateTime.of(now.toLocalDate(), LocalTime.parse(cand.time))
+            } catch (_: Exception) { continue }
+            val diff = Duration.between(sched, now).seconds
+            if (diff in 0..90) {
+                val row = db.insertWithOnConflict("med_fired", null,
+                    ContentValues().apply { put("med_time_id", cand.timeId); put("fired_date", today) },
+                    SQLiteDatabase.CONFLICT_IGNORE)
+                if (row != -1L) due.add(DueMed(cand.name, cand.dose))
+            }
+        }
+        return due
     }
 }

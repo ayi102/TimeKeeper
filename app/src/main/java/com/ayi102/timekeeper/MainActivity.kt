@@ -37,6 +37,8 @@ class MainActivity : AppCompatActivity() {
         val web = findViewById<WebView>(R.id.webview)
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
+        // Let the medication-reminder chime auto-play without a user tap.
+        web.settings.mediaPlaybackRequiresUserGesture = false
         web.loadUrl("http://127.0.0.1:8080/")
 
         scheduleDailyBackup()

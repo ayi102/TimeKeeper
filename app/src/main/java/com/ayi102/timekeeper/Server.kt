@@ -40,13 +40,22 @@ class Server(
             // ----- open (kiosk) -----
             get && (uri == "/" || uri == "/index.html") -> html(asset("kiosk.html"))
             get && uri == "/api/workers" -> json(workersJson())
-            get && uri == "/api/info" ->
-                json(JSONObject().put("ip", Net.lanIp()).put("port", port).toString())
+            get && uri == "/api/info" -> {
+                val ip = Net.lanIp()
+                json(JSONObject().put("ip", ip ?: "").put("connected", ip != null).put("port", port).toString())
+            }
             get && uri == "/ali_photo.jpg" -> {
                 val b = context.assets.open("ali_photo.jpg").use { it.readBytes() }
                 newFixedLengthResponse(Response.Status.OK, "image/jpeg", b.inputStream(), b.size.toLong())
             }
             post && uri == "/api/play/ali" -> { Sound.play(context, R.raw.ali_ismail); ok() }
+            get && uri == "/api/meds/due" -> {
+                val arr = JSONArray()
+                for (m in db.medsDue(Times.now()))
+                    arr.put(JSONObject().put("name", m.name).put("dose", m.dose))
+                json(arr.toString())
+            }
+            get && uri == "/media/med_alert" -> serveMedAlert()
             post && uri == "/api/clock" -> {
                 val id = param(session, "id")?.toLongOrNull()
                 if (id == null) bad("missing id") else {
@@ -73,6 +82,7 @@ class Server(
             get && uri == "/admin/payments" -> html(asset(if (authed(session)) "payments.html" else "login.html"))
             get && uri == "/admin/entries" -> html(asset(if (authed(session)) "entries.html" else "login.html"))
             get && uri == "/admin/settings" -> html(asset(if (authed(session)) "settings.html" else "login.html"))
+            get && uri == "/admin/meds" -> html(asset(if (authed(session)) "meds.html" else "login.html"))
 
             // ----- admin APIs (PIN required) -----
             get && uri == "/api/summary" -> guard(session) { json(summaryJson()) }
@@ -186,6 +196,30 @@ class Server(
                 json(JSONObject().put("ok", id != null).toString())
             }
 
+            // ----- medications -----
+            get && uri == "/api/meds" -> guard(session) { json(medsJson()) }
+            post && uri == "/admin/med" -> guard(session) {
+                val id = param(session, "id")?.toLongOrNull()
+                val name = param(session, "name").orEmpty()
+                val dose = param(session, "dose").orEmpty()
+                val slots = parseMedSlots(param(session, "slots") ?: "[]")
+                when {
+                    name.isEmpty() -> json(err("Medication name is required."))
+                    slots.isEmpty() -> json(err("Add at least one day and time."))
+                    else -> { db.saveMed(id, name, dose, slots); ok() }
+                }
+            }
+            post && uri == "/admin/med/active" -> guard(session) {
+                val id = param(session, "id")?.toLongOrNull()
+                if (id != null) db.setMedActive(id, param(session, "active") == "1")
+                json(JSONObject().put("ok", id != null).toString())
+            }
+            post && uri == "/admin/med/delete" -> guard(session) {
+                val id = param(session, "id")?.toLongOrNull()
+                if (id != null) db.deleteMed(id)
+                json(JSONObject().put("ok", id != null).toString())
+            }
+
             // ----- mail settings + backup -----
             get && uri == "/api/settings" -> guard(session) {
                 val s = Settings(context)
@@ -288,6 +322,44 @@ class Server(
                 .put("pay", s.pay).put("paid", s.paid).put("owed", s.owedDue).put("tips", s.tips))
         }
         return arr.toString()
+    }
+
+    private fun medsJson(): String {
+        val arr = JSONArray()
+        for (m in db.meds()) {
+            val slots = JSONArray()
+            for (s in m.slots) slots.put(JSONObject().put("weekday", s.weekday).put("time", s.time))
+            arr.put(JSONObject().put("id", m.id).put("name", m.name).put("dose", m.dose)
+                .put("active", m.active).put("slots", slots))
+        }
+        return arr.toString()
+    }
+
+    /** Parse the schedule slots JSON ([{weekday,time}]) sent by the meds page. */
+    private fun parseMedSlots(raw: String): List<MedSlot> {
+        val out = ArrayList<MedSlot>()
+        try {
+            val arr = JSONArray(raw)
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                val wd = o.getInt("weekday")
+                val t = o.optString("time")
+                if (t.isNotEmpty() && wd in 0..6) out.add(MedSlot(wd, t))
+            }
+        } catch (_: Exception) { /* malformed → treated as no slots */ }
+        return out
+    }
+
+    /** Serve the medication-reminder sound if the admin has added one to assets/. */
+    private fun serveMedAlert(): Response {
+        for ((name, mime) in listOf("med_alert.m4a" to "audio/mp4", "med_alert.ogg" to "audio/ogg",
+                "med_alert.mp3" to "audio/mpeg", "med_alert.wav" to "audio/wav")) {
+            try {
+                val b = context.assets.open(name).use { it.readBytes() }
+                return newFixedLengthResponse(Response.Status.OK, mime, b.inputStream(), b.size.toLong())
+            } catch (_: Exception) { /* not present — try the next */ }
+        }
+        return newFixedLengthResponse(Response.Status.NOT_FOUND, MIME_PLAINTEXT, "no med alert sound")
     }
 
     private fun employeesJson(): String {

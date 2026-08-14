@@ -6,7 +6,8 @@ import java.util.Collections
 
 /** Best-effort LAN IPv4 of this device (the address you'd type in a browser). */
 object Net {
-    fun lanIp(): String {
+    /** The device's LAN IPv4, or null when it isn't on a routable network (e.g. Wi-Fi dropped). */
+    fun lanIp(): String? {
         try {
             // (interfaceName, ipv4) for every up, non-loopback, site-local address.
             val candidates = ArrayList<Pair<String, String>>()
@@ -27,9 +28,8 @@ object Net {
                     !it.first.startsWith("p2p") && !it.second.startsWith("192.168.49.")
                 }?.second
                 ?: candidates.firstOrNull()?.second
-                ?: "127.0.0.1"
         } catch (_: Exception) {
         }
-        return "127.0.0.1"
+        return null
     }
 }

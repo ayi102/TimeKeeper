@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TimeKeeper · Medications</title>
+  <style>
+    :root {
+      --bg:#0b1020; --panel:#181f3a; --panel-2:#2a3357; --text:#f1f5f9;
+      --muted:#9aa6c4; --green:#22c55e; --blue:#3b82f6; --red:#ef4444;
+      --indigo:#6366f1; --violet:#a855f7; --grad:linear-gradient(135deg,#6366f1,#a855f7);
+    }
+    * { box-sizing:border-box; }
+    html,body { margin:0; min-height:100%; }
+    body {
+      font-family:-apple-system,"Roboto",sans-serif; color:var(--text);
+      background:
+        radial-gradient(900px 520px at 12% -8%, rgba(99,102,241,.30), transparent 60%),
+        radial-gradient(820px 520px at 108% 4%, rgba(168,85,247,.20), transparent 55%),
+        var(--bg);
+      background-attachment:fixed;
+    }
+    .bar { display:flex; align-items:center; gap:1rem; padding:1rem 1.25rem; background:rgba(24,31,58,.72); backdrop-filter:blur(10px); border-bottom:1px solid rgba(148,163,247,.15); }
+    .brand { font-weight:700; font-size:1.1rem; }
+    main { padding:1rem 1.25rem; max-width:860px; margin:0 auto; display:flex; flex-direction:column; gap:1.25rem; }
+    .card { background:linear-gradient(160deg,rgba(30,38,72,.9),rgba(20,26,54,.9)); border:1px solid rgba(148,163,247,.12); border-radius:16px; padding:1rem 1.25rem; box-shadow:0 10px 26px rgba(0,0,0,.25); }
+    h2 { margin:.2rem 0 1rem; font-size:1.1rem; }
+    .intro { color:var(--muted); font-size:.9rem; margin:.25rem 0 1rem; }
+    .form label { display:flex; flex-direction:column; gap:.3rem; font-size:.8rem; color:var(--muted); margin-bottom:.9rem; }
+    .form input[type=text] { background:var(--bg); border:1px solid var(--panel-2); color:var(--text); padding:.6rem .7rem; border-radius:8px; font-size:1rem; }
+    .times-label { font-size:.8rem; color:var(--muted); margin-bottom:.5rem; }
+    .times { display:flex; flex-direction:column; gap:.9rem; margin-bottom:.9rem; }
+    .timerow { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; background:rgba(148,163,247,.06); border:1px solid rgba(148,163,247,.12); border-radius:12px; padding:.7rem .8rem; }
+    .timerow input[type=time] { background:var(--bg); border:1px solid var(--panel-2); color:var(--text); padding:.5rem .6rem; border-radius:8px; font-size:1rem; }
+    .daybtns { display:flex; gap:.3rem; flex-wrap:wrap; }
+    .daybtn { min-width:2.3rem; height:2.3rem; padding:0 .35rem; border-radius:8px; border:1px solid var(--panel-2); background:var(--bg); color:var(--muted); font-size:.8rem; font-weight:700; cursor:pointer; }
+    .daybtn.on { background:var(--grad); color:#fff; border-color:transparent; }
+    .actions { display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; }
+    .btn { border:none; border-radius:8px; cursor:pointer; padding:.55rem .9rem; font-size:.9rem; font-weight:600; background:var(--panel-2); color:var(--text); text-decoration:none; }
+    .btn.primary { background:linear-gradient(135deg,#6366f1,#a855f7); box-shadow:0 4px 14px rgba(99,102,241,.35); }
+    .btn.ghost { background:transparent; border:1px solid var(--panel-2); }
+    .btn.danger { background:var(--red); font-size:.8rem; padding:.4rem .7rem; }
+    .btn.small { font-size:.8rem; padding:.4rem .7rem; }
+    .remove { margin-left:auto; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { text-align:left; padding:.6rem .5rem; border-bottom:1px solid var(--panel-2); vertical-align:top; }
+    th { color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.5px; }
+    tr.inactive { opacity:.5; }
+    .slotline { margin-bottom:.35rem; }
+    .pill { display:inline-block; font-size:.8rem; background:rgba(148,163,247,.14); border:1px solid rgba(148,163,247,.25); border-radius:999px; padding:.15rem .55rem; font-variant-numeric:tabular-nums; }
+    .days { color:var(--muted); font-size:.85rem; margin-left:.4rem; }
+    .row-actions { display:flex; gap:.4rem; justify-content:flex-end; }
+    .status { font-size:.9rem; min-height:1.2em; margin-top:.25rem; }
+    .status.err { color:#fca5a5; } .status.ok { color:#86efac; }
+    .muted { color:var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <a href="/admin" class="btn ghost">← Admin</a>
+    <span class="brand">Medications</span>
+  </div>
+
+  <main>
+    <div class="card">
+      <h2 id="formTitle">Add Medication</h2>
+      <p class="intro">Set the medication and, for each time of day, the days it's given.
+        At each scheduled time the clock-in screen shows a full-screen reminder for one minute.</p>
+      <div class="form">
+        <input type="hidden" id="medId">
+        <label>Name<input type="text" id="medName" placeholder="e.g. Metformin"></label>
+        <label>Dose (optional)<input type="text" id="medDose" placeholder="e.g. 500 mg, 1 tablet"></label>
+        <div class="times-label">Times &amp; days</div>
+        <div class="times" id="times"></div>
+        <div class="actions">
+          <button class="btn ghost small" onclick="addTime()">+ Add time</button>
+        </div>
+        <div class="actions" style="margin-top:1rem">
+          <button class="btn primary" onclick="saveMed()">Save</button>
+          <button class="btn ghost" onclick="clearForm()">Clear</button>
+        </div>
+        <div class="status" id="formStatus"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Scheduled Medications</h2>
+      <table>
+        <thead><tr><th>Name</th><th>Dose</th><th>Schedule</th><th></th></tr></thead>
+        <tbody id="medRows"></tbody>
+      </table>
+      <p class="muted" id="empty" hidden>No medications yet.</p>
+    </div>
+  </main>
+
+  <script>
+    var DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    var DAYS_SHORT = ["M", "Tu", "W", "Th", "F", "Sa", "Su"];
+
+    // Build one time row: a time input, 7 day toggles, and a Remove button.
+    function addTime(value, days) {
+      days = days || [];
+      var row = document.createElement("div");
+      row.className = "timerow";
+
+      var input = document.createElement("input");
+      input.type = "time";
+      if (value) input.value = value;
+      row.appendChild(input);
+
+      var toggles = document.createElement("div");
+      toggles.className = "daybtns";
+      DAYS_SHORT.forEach(function (lbl, idx) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "daybtn" + (days.indexOf(idx) >= 0 ? " on" : "");
+        b.textContent = lbl;
+        b.setAttribute("data-wd", idx);
+        b.onclick = function () { b.classList.toggle("on"); };
+        toggles.appendChild(b);
+      });
+      row.appendChild(toggles);
+
+      var rm = document.createElement("button");
+      rm.type = "button"; rm.className = "btn ghost small remove"; rm.textContent = "Remove";
+      rm.onclick = function () { row.remove(); };
+      row.appendChild(rm);
+
+      document.getElementById("times").appendChild(row);
+    }
+
+    // Expand every time row into {weekday, time} slots (one per selected day).
+    function collectSlots() {
+      var slots = [];
+      document.querySelectorAll("#times .timerow").forEach(function (row) {
+        var t = row.querySelector("input[type=time]").value;
+        if (!t) return;
+        row.querySelectorAll(".daybtn.on").forEach(function (b) {
+          slots.push({ weekday: parseInt(b.getAttribute("data-wd"), 10), time: t });
+        });
+      });
+      return slots;
+    }
+
+    function clearForm() {
+      document.getElementById("medId").value = "";
+      document.getElementById("medName").value = "";
+      document.getElementById("medDose").value = "";
+      document.getElementById("times").innerHTML = "";
+      addTime();
+      document.getElementById("formTitle").textContent = "Add Medication";
+      setStatus("", "");
+    }
+
+    function setStatus(text, cls) {
+      var s = document.getElementById("formStatus");
+      s.textContent = text; s.className = "status " + (cls || "");
+    }
+
+    function saveMed() {
+      var name = document.getElementById("medName").value.trim();
+      var dose = document.getElementById("medDose").value.trim();
+      var slots = collectSlots();
+      if (!name) { setStatus("Name is required.", "err"); return; }
+      if (!slots.length) { setStatus("Add at least one day and time.", "err"); return; }
+      var q = "?name=" + encodeURIComponent(name) +
+              "&dose=" + encodeURIComponent(dose) +
+              "&slots=" + encodeURIComponent(JSON.stringify(slots));
+      var id = document.getElementById("medId").value;
+      if (id) q += "&id=" + encodeURIComponent(id);
+      fetch("/admin/med" + q, { method: "POST" })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (res.ok) { clearForm(); load(); }
+          else setStatus(res.message || "Could not save.", "err");
+        })
+        .catch(function () { setStatus("Could not reach the server.", "err"); });
+    }
+
+    // Group a med's slots by time so each time is one editable row with its days.
+    function groupByTime(slots) {
+      var byTime = {};
+      (slots || []).forEach(function (s) {
+        (byTime[s.time] = byTime[s.time] || []).push(s.weekday);
+      });
+      return Object.keys(byTime).sort().map(function (t) {
+        return { time: t, days: byTime[t].sort(function (a, b) { return a - b; }) };
+      });
+    }
+
+    function editMed(m) {
+      document.getElementById("medId").value = m.id;
+      document.getElementById("medName").value = m.name;
+      document.getElementById("medDose").value = m.dose || "";
+      document.getElementById("times").innerHTML = "";
+      var groups = groupByTime(m.slots);
+      if (!groups.length) addTime();
+      else groups.forEach(function (g) { addTime(g.time, g.days); });
+      document.getElementById("formTitle").textContent = "Edit Medication";
+      setStatus("", "");
+      window.scrollTo(0, 0);
+    }
+
+    function toggleActive(id, active) {
+      fetch("/admin/med/active?id=" + id + "&active=" + (active ? "1" : "0"), { method: "POST" }).then(load);
+    }
+
+    function delMed(id, name) {
+      if (!confirm("Delete " + name + " and its schedule?")) return;
+      fetch("/admin/med/delete?id=" + id, { method: "POST" }).then(load);
+    }
+
+    function fmtTime(t) {
+      var p = t.split(":"); var h = parseInt(p[0], 10);
+      var ap = h >= 12 ? "PM" : "AM"; var hr = h % 12 || 12;
+      return hr + ":" + p[1] + " " + ap;
+    }
+
+    // "Mon, Wed, Fri" — or "Every day" / "Weekdays" as a shorthand.
+    function fmtDays(days) {
+      if (days.length === 7) return "Every day";
+      if (days.length === 5 && days.every(function (d) { return d < 5; })) return "Weekdays";
+      return days.map(function (d) { return DAYS[d]; }).join(", ");
+    }
+
+    function render(meds) {
+      var body = document.getElementById("medRows");
+      body.innerHTML = "";
+      document.getElementById("empty").hidden = meds.length > 0;
+      meds.forEach(function (m) {
+        var tr = document.createElement("tr");
+        if (!m.active) tr.className = "inactive";
+
+        var name = document.createElement("td"); name.textContent = m.name;
+        var dose = document.createElement("td"); dose.textContent = m.dose || "—";
+
+        var sched = document.createElement("td");
+        var groups = groupByTime(m.slots);
+        if (!groups.length) sched.textContent = "—";
+        groups.forEach(function (g) {
+          var line = document.createElement("div"); line.className = "slotline";
+          var pill = document.createElement("span"); pill.className = "pill"; pill.textContent = fmtTime(g.time);
+          var days = document.createElement("span"); days.className = "days"; days.textContent = fmtDays(g.days);
+          line.appendChild(pill); line.appendChild(days);
+          sched.appendChild(line);
+        });
+
+        var act = document.createElement("td");
+        var wrap = document.createElement("div"); wrap.className = "row-actions";
+        var edit = document.createElement("button"); edit.className = "btn small"; edit.textContent = "Edit";
+        edit.onclick = function () { editMed(m); };
+        var tog = document.createElement("button"); tog.className = "btn small"; tog.textContent = m.active ? "Disable" : "Enable";
+        tog.onclick = function () { toggleActive(m.id, !m.active); };
+        var del = document.createElement("button"); del.className = "btn danger"; del.textContent = "Delete";
+        del.onclick = function () { delMed(m.id, m.name); };
+        wrap.appendChild(edit); wrap.appendChild(tog); wrap.appendChild(del);
+        act.appendChild(wrap);
+
+        tr.appendChild(name); tr.appendChild(dose); tr.appendChild(sched); tr.appendChild(act);
+        body.appendChild(tr);
+      });
+    }
+
+    function load() {
+      fetch("/api/meds")
+        .then(function (r) { return r.json(); })
+        .then(render)
+        .catch(function () {});
+    }
+
+    clearForm();
+    load();
+  </script>
+</body>
+</html>

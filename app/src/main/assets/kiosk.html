@@ -72,6 +72,17 @@
     .namecard.is-out { border-color:rgba(148,163,247,.18); }
     .empty { text-align:center; color:var(--muted); font-size:1.1rem; margin-top:2rem; }
     .footer { text-align:center; color:var(--muted); font-size:.8rem; padding:.5rem; }
+    /* connection status pill in the top bar */
+    .netpill {
+      display:flex; align-items:center; gap:.45rem; margin-left:.75rem;
+      padding:.4rem .85rem; border-radius:999px; font-size:.9rem; font-weight:700;
+      color:var(--muted); background:rgba(148,163,247,.12); border:1px solid rgba(148,163,247,.22);
+    }
+    .netpill .dot { width:9px; height:9px; border-radius:50%; background:var(--muted); flex:none; }
+    .netpill.ok { color:#4ade80; }
+    .netpill.ok .dot { background:#22c55e; box-shadow:0 0 8px rgba(34,197,94,.85); }
+    .netpill.bad { color:#fca5a5; background:rgba(239,68,68,.14); border-color:rgba(239,68,68,.4); }
+    .netpill.bad .dot { background:#ef4444; box-shadow:0 0 8px rgba(239,68,68,.85); }
     /* result overlay */
     .overlay {
       position:fixed; inset:0; background:rgba(6,9,20,.72); backdrop-filter:blur(4px); display:none;
@@ -92,12 +103,29 @@
     .sheet.ok .mark { color:var(--green); background:rgba(34,197,94,.15); }
     .sheet.err .mark { color:#fca5a5; background:rgba(239,68,68,.15); }
     .sheet .msg { font-size:1.35rem; font-weight:600; }
+    /* medication reminder overlay (sits above the clock-result overlay) */
+    .overlay.med { z-index:60; }
+    .sheet.medsheet .mark { color:#f0abfc; background:rgba(168,85,247,.18); }
+    .medlist { list-style:none; padding:0; margin:1.25rem 0 1.5rem; display:flex; flex-direction:column; gap:.7rem; }
+    .medlist li {
+      font-size:1.4rem; font-weight:800; text-align:center;
+      background:rgba(148,163,247,.12); border:1px solid rgba(148,163,247,.22);
+      border-radius:14px; padding:.9rem 1rem;
+    }
+    .medlist li .dose { display:block; font-size:1rem; font-weight:500; color:var(--muted); margin-top:.25rem; }
+    .medok {
+      border:none; border-radius:14px; background:var(--grad); color:#fff;
+      font-size:1.25rem; font-weight:800; padding:.9rem 3rem; cursor:pointer;
+      box-shadow:0 6px 18px rgba(99,102,241,.4);
+    }
+    .medok:active { transform:scale(.97); }
   </style>
 </head>
 <body>
   <div class="topbar">
     <img class="avatar" id="avatar" src="/ali_photo.jpg" alt="Ali Ismail">
     <span class="brand">TimeKeeper <span class="byline">by Ali Ismail</span></span>
+    <div class="netpill" id="netpill"><span class="dot"></span><span id="netlabel">…</span></div>
     <button class="adminbtn" id="adminBtn">Admin</button>
     <div class="topright">
       <div class="clock" id="clock">--:--</div>
@@ -116,6 +144,16 @@
       <div class="mark" id="mark"></div>
       <div class="msg" id="msg"></div>
     </div>
+  </div>
+
+  <div class="overlay med" id="medOverlay">
+    <div class="sheet medsheet">
+      <div class="mark">💊</div>
+      <div class="msg">Medication reminder</div>
+      <ul class="medlist" id="medList"></ul>
+      <button class="medok" id="medOk">OK</button>
+    </div>
+    <audio id="medAudio" loop preload="auto" src="/media/med_alert"></audio>
   </div>
 
   <div class="footer" id="footer">Runs entirely on the tablet.</div>
@@ -193,14 +231,107 @@
       fetch("/api/play/ali", { method: "POST" });
     });
 
-    // The footer shows the address to use from your phone — info only, not a button.
+    // Live Wi-Fi/LAN status. The top-bar pill is the single status indicator; it
+    // polls so a dropped connection shows up and self-heals when Wi-Fi returns —
+    // no reboot or app restart needed. The footer just carries the phone address.
     var footer = document.getElementById("footer");
-    fetch("/api/info")
-      .then(function (r) { return r.json(); })
-      .then(function (i) {
-        footer.textContent = "On your phone (same WiFi): http://" + i.ip + ":" + i.port + "/admin";
-      })
-      .catch(function () { footer.textContent = ""; });
+    var netpill = document.getElementById("netpill");
+    var netlabel = document.getElementById("netlabel");
+    function refreshInfo() {
+      fetch("/api/info", { cache: "no-store" })
+        .then(function (r) { return r.json(); })
+        .then(function (i) {
+          if (i.connected) {
+            netpill.className = "netpill ok"; netlabel.textContent = "Online";
+            footer.textContent = "On your phone (same Wi-Fi): http://" + i.ip + ":" + i.port + "/admin";
+          } else {
+            netpill.className = "netpill bad"; netlabel.textContent = "Wi-Fi offline";
+            footer.textContent = "Runs entirely on the tablet.";
+          }
+        })
+        .catch(function () {
+          netpill.className = "netpill bad"; netlabel.textContent = "Wi-Fi offline";
+          footer.textContent = "Runs entirely on the tablet.";
+        });
+    }
+    refreshInfo();
+    setInterval(refreshInfo, 5000);
+
+    // ---- Medication reminders ----
+    // Poll for a med whose time just arrived; show a full-screen reminder for up
+    // to 1 minute with a repeating chime. OK silences and dismisses it. The server
+    // marks each reminder fired, so it shows once per scheduled time per day.
+    var medOverlay = document.getElementById("medOverlay");
+    var medList = document.getElementById("medList");
+    var medAudio = document.getElementById("medAudio");
+    var medOkBtn = document.getElementById("medOk");
+    var medTimer = null;
+    var beep = null;   // WebAudio fallback when no med_alert sound file is present
+
+    function startBeep() {
+      try {
+        var Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        var ctx = new Ctx();
+        if (ctx.resume) ctx.resume();
+        function ping() {
+          var o = ctx.createOscillator(), g = ctx.createGain();
+          o.type = "sine"; o.frequency.value = 880;
+          g.gain.setValueAtTime(0.0001, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.05);
+          g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+          o.connect(g); g.connect(ctx.destination);
+          o.start(); o.stop(ctx.currentTime + 0.55);
+        }
+        ping();
+        beep = { ctx: ctx, iv: setInterval(ping, 1500) };
+      } catch (e) {}
+    }
+    function stopBeep() {
+      if (beep) { clearInterval(beep.iv); try { beep.ctx.close(); } catch (e) {} beep = null; }
+    }
+    function startSound() {
+      var p = medAudio.play();          // prefer the uploaded sound file
+      if (p && p.catch) p.catch(function () { startBeep(); });   // none present → chime
+    }
+    function stopSound() {
+      try { medAudio.pause(); medAudio.currentTime = 0; } catch (e) {}
+      stopBeep();
+    }
+
+    function dismissMeds() {
+      medOverlay.classList.remove("show");
+      medList.innerHTML = "";
+      stopSound();
+      if (medTimer) { clearTimeout(medTimer); medTimer = null; }
+    }
+    medOkBtn.addEventListener("click", dismissMeds);
+
+    function showMeds(meds) {
+      meds.forEach(function (m) {
+        var li = document.createElement("li");
+        li.textContent = m.name;
+        if (m.dose) {
+          var d = document.createElement("span");
+          d.className = "dose"; d.textContent = m.dose;
+          li.appendChild(d);
+        }
+        medList.appendChild(li);
+      });
+      medOverlay.classList.add("show");
+      startSound();
+      if (medTimer) clearTimeout(medTimer);
+      medTimer = setTimeout(dismissMeds, 60000);   // auto-dismiss after 1 minute
+    }
+
+    function checkMeds() {
+      fetch("/api/meds/due", { cache: "no-store" })
+        .then(function (r) { return r.json(); })
+        .then(function (meds) { if (meds && meds.length) showMeds(meds); })
+        .catch(function () {});
+    }
+    checkMeds();
+    setInterval(checkMeds, 15000);
   </script>
 </body>
 </html>
