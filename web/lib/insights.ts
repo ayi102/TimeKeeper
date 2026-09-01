@@ -65,10 +65,13 @@ export async function computeInsights(now: DateTime = Times.now()) {
   const secByEmpMonth = new Map<string, number>();
   const beh = new Map<number, WorkerInsight["behavior"]>();
   const cinByEmpDate = new Map<string, DateTime[]>();
+  const firstCinByEmp = new Map<number, DateTime>(); // when each worker's tracking began
   for (const e of emps) beh.set(e.id, { shifts: 0, late: 0, tooEarly: 0, overtime: 0, forgotOut: 0, missed: 0 });
 
   for (const en of entries) {
     const cin = Times.parse(en.clockIn);
+    const prevFirst = firstCinByEmp.get(en.employeeId);
+    if (!prevFirst || cin.toMillis() < prevFirst.toMillis()) firstCinByEmp.set(en.employeeId, cin);
     const month = cin.toFormat("yyyy-MM");
     const cout = en.clockOut ? Times.parse(en.clockOut) : now;
     secByEmpMonth.set(`${en.employeeId}:${month}`, (secByEmpMonth.get(`${en.employeeId}:${month}`) ?? 0) + Math.max(0, cout.diff(cin, "seconds").seconds));
@@ -96,12 +99,22 @@ export async function computeInsights(now: DateTime = Times.now()) {
     }
   }
 
-  // Missed = a scheduled, already-past DAY with no clock-in at all.
-  let d = win.startOf("day");
+  // Missed = a scheduled, already-past DAY with no clock-in at all — but only
+  // counted from when we actually started tracking each worker, so days before
+  // the system was in use aren't wrongly counted as missed.
+  const winDay = win.startOf("day");
+  const floorByEmp = new Map<number, number>();
+  for (const e of emps) {
+    const f = firstCinByEmp.get(e.id);
+    if (f) floorByEmp.set(e.id, Math.max(winDay.toMillis(), f.startOf("day").toMillis()));
+  }
+  let d = winDay;
   const today = now.startOf("day");
   while (d.toMillis() < today.toMillis()) {
     const wd = weekday(d);
     for (const e of emps) {
+      const floor = floorByEmp.get(e.id);
+      if (floor == null || d.toMillis() < floor) continue; // before this worker was tracked
       const shifts = schedByEmpWd.get(`${e.id}:${wd}`) ?? [];
       if (shifts.length === 0) continue;
       // only if every shift that day is already over
