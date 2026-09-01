@@ -16,7 +16,7 @@ const fmt = (t: string) => { const [h, m] = t.split(":").map(Number); return `${
 
 function Scheduler() {
   const [workers, setWorkers] = useState<Worker[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [viewId, setViewId] = useState<number | null>(null); // null = show everyone
   const [editor, setEditor] = useState<Editor | null>(null);
   const [status, setStatus] = useState("");
   const seq = useRef(0);
@@ -29,12 +29,11 @@ function Scheduler() {
         shifts: w.shifts.map((s) => ({ key: `k${seq.current++}`, weekday: s.weekday, start: s.start, end: s.end })),
       }));
       setWorkers(ws);
-      setSelectedId((cur) => cur ?? (new URLSearchParams(window.location.search).get("emp") ? Number(new URLSearchParams(window.location.search).get("emp")) : ws[0]?.id ?? null));
+      const emp = new URLSearchParams(window.location.search).get("emp");
+      if (emp) setViewId((cur) => cur ?? Number(emp)); // arriving from a worker's row focuses them
     } catch { setStatus("Could not load schedules."); }
   }
   useEffect(() => { load(); }, []);
-
-  const selected = workers.find((w) => w.id === selectedId) ?? null;
 
   async function saveWorker(workerId: number, shifts: Shift[]) {
     const payload = shifts.map(({ weekday, start, end }) => ({ weekday, start, end }));
@@ -46,9 +45,9 @@ function Scheduler() {
   }
 
   function openAdd(weekday: number, hour: number) {
-    if (selectedId == null) { setStatus("Pick a worker first (chips above)."); return; }
+    if (viewId == null) { setStatus("Pick a person above to add a shift for them."); return; }
     const s = Math.max(0, Math.min(23, hour));
-    setEditor({ mode: "add", workerId: selectedId, weekday, start: `${pad(s)}:00`, end: `${pad(Math.min(s + 8, 23))}:00` });
+    setEditor({ mode: "add", workerId: viewId, weekday, start: `${pad(s)}:00`, end: `${pad(Math.min(s + 8, 23))}:00` });
   }
   function openEdit(w: Worker, sh: Shift) {
     setEditor({ mode: "edit", workerId: w.id, key: sh.key, weekday: sh.weekday, start: sh.start, end: sh.end });
@@ -76,7 +75,8 @@ function Scheduler() {
   // Segments to draw in a given day column (handles overnight spillover).
   function daySegments(day: number) {
     const segs: { w: Worker; sh: Shift; left: number; width: number }[] = [];
-    for (const w of workers) {
+    const src = viewId == null ? workers : workers.filter((w) => w.id === viewId);
+    for (const w of src) {
       for (const sh of w.shifts) {
         const s = toH(sh.start), e = toH(sh.end);
         if (sh.start === sh.end) continue;
@@ -101,13 +101,15 @@ function Scheduler() {
       <main style={{ maxWidth: 900 }}>
         <div className="card">
           <p className="intro">
-            Each row is a day; the bar is midnight → midnight. Tap a shift to edit or delete it. Tap an empty spot on a day
-            to add a shift for the selected worker. Overnight shifts wrap into the next day.
+            Each row is a day; the bar is midnight → midnight. Pick a person to see just their schedule, or
+            <strong> All</strong> to see everyone. Tap a shift to edit or delete it; tap an empty spot to add a shift
+            (for the selected person). Overnight shifts wrap into the next day.
           </p>
 
           <div className="chiprow">
+            <button className={`chip ${viewId == null ? "sel" : ""}`} onClick={() => setViewId(null)}>All</button>
             {workers.map((w) => (
-              <button key={w.id} className={`chip ${w.id === selectedId ? "sel" : ""} ${w.active ? "" : "off"}`} onClick={() => setSelectedId(w.id)}>
+              <button key={w.id} className={`chip ${w.id === viewId ? "sel" : ""} ${w.active ? "" : "off"}`} onClick={() => setViewId(w.id)}>
                 <span className="dot" style={{ background: w.color }} />{w.name}
               </button>
             ))}
