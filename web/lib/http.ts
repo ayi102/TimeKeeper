@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { isAdmin } from "./admin-auth";
 
 /** Small helpers so route handlers read like the tablet's Server.kt. */
 
@@ -28,10 +26,14 @@ export function money(req: NextRequest, name: string): number {
   return n != null && n > 0 ? n : 0;
 }
 
-/** True when the admin PIN cookie is present and valid (Supabase session is separate). */
+/**
+ * Admin routes are gated solely by the Supabase login (enforced in middleware for
+ * all /api). There's no separate admin PIN anymore — the phone logs in, the
+ * tablet is a locked kiosk that can't reach /admin. So any request that gets here
+ * is already an authenticated admin.
+ */
 export async function isAdminRequest(): Promise<boolean> {
-  const c = await cookies();
-  return isAdmin(c.get("tk_admin")?.value);
+  return true;
 }
 
 /** Cron endpoints are authorized by a shared secret (Vercel Cron sends it as a Bearer token). */

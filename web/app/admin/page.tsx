@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import AdminGate from "./AdminGate";
+import AdminGate, { SignOutButton } from "./AdminGate";
 
 interface EmpRow { id: number; name: string; rate: number; active: boolean; }
 interface SumRow { id: number; name: string; hours: number; pay: number; paid: number; owed: number; tips: number; }
@@ -51,10 +51,10 @@ function AdminHome() {
   return (
     <>
       <div className="bar">
-        <a href="/" className="btn ghost">← Kiosk</a>
         <span className="brand">TimeKeeper <span className="byline">by Ali Ismail</span></span>
         <a href="/admin/meds" className="btn ghost" style={{ marginLeft: "auto" }}>Medications</a>
-        <a href="/admin/settings" className="btn ghost">Mail &amp; Backup</a>
+        <a href="/admin/settings" className="btn ghost">Mail</a>
+        <SignOutButton />
       </div>
 
       <main>

@@ -150,8 +150,6 @@ export default function Kiosk() {
         {workers.length === 0 && <p className="empty">No workers yet.</p>}
       </div>
 
-      <div className="kfooter">Runs in the cloud — reachable from anywhere you sign in.</div>
-
       {result && (
         <div className="overlay">
           <div className={`sheet ${result.ok ? "ok" : "err"}`}>

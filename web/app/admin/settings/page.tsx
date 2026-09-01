@@ -7,8 +7,6 @@ function Settings() {
   const [mail, setMail] = useState({ host: "smtp.gmail.com", port: "587", user: "", to: "", password: "" });
   const [hasPassword, setHasPassword] = useState(false);
   const [saveStatus, setSaveStatus] = useState<{ msg: string; ok: boolean }>({ msg: "", ok: true });
-  const [pin, setPin] = useState({ current: "", next: "", confirm: "" });
-  const [pinStatus, setPinStatus] = useState<{ msg: string; ok: boolean }>({ msg: "", ok: true });
   const [testStatus, setTestStatus] = useState<{ msg: string; ok: boolean }>({ msg: "", ok: true });
 
   useEffect(() => {
@@ -33,18 +31,6 @@ function Settings() {
     }
   }
 
-  async function savePin() {
-    if (pin.next.length < 4) { setPinStatus({ msg: "New PIN must be at least 4 digits.", ok: false }); return; }
-    if (pin.next !== pin.confirm) { setPinStatus({ msg: "New PINs don't match.", ok: false }); return; }
-    try {
-      const res = await (await fetch(`/api/admin/pin?current=${encodeURIComponent(pin.current)}&new=${encodeURIComponent(pin.next)}`, { method: "POST" })).json();
-      setPinStatus({ msg: res.ok ? "PIN updated." : (res.message || "Could not update."), ok: res.ok });
-      if (res.ok) setPin({ current: "", next: "", confirm: "" });
-    } catch {
-      setPinStatus({ msg: "Could not update.", ok: false });
-    }
-  }
-
   async function sendTest() {
     setTestStatus({ msg: "Sending…", ok: true });
     try {
@@ -59,7 +45,7 @@ function Settings() {
     <>
       <div className="bar">
         <a href="/admin" className="btn ghost">← Admin</a>
-        <span className="brand">Mail &amp; Backup</span>
+        <span className="brand">Mail</span>
       </div>
       <main style={{ maxWidth: 600 }}>
         <div className="card">
@@ -74,16 +60,6 @@ function Settings() {
           <div style={{ marginTop: ".9rem" }}><button className="btn primary" onClick={saveMail}>Save</button></div>
           <p className="hint">Use a Google <strong>App Password</strong> (Google Account → Security → 2-Step Verification → App passwords), not your normal password. Leave the password blank to keep the saved one.</p>
           <div className={`status ${saveStatus.ok ? "ok" : "err"}`}>{saveStatus.msg}</div>
-        </div>
-
-        <div className="card">
-          <h2>Admin PIN</h2>
-          <p className="hint" style={{ marginTop: 0 }}>The PIN for the admin screens. Default is <strong>1234</strong> — change it.</p>
-          <label className="field" style={{ marginTop: ".5rem" }}>Current PIN<input type="password" inputMode="numeric" value={pin.current} onChange={(e) => setPin({ ...pin, current: e.target.value })} /></label>
-          <label className="field" style={{ marginTop: ".9rem" }}>New PIN<input type="password" inputMode="numeric" placeholder="at least 4 digits" value={pin.next} onChange={(e) => setPin({ ...pin, next: e.target.value })} /></label>
-          <label className="field" style={{ marginTop: ".9rem" }}>Confirm new PIN<input type="password" inputMode="numeric" value={pin.confirm} onChange={(e) => setPin({ ...pin, confirm: e.target.value })} /></label>
-          <div style={{ marginTop: ".9rem" }}><button className="btn primary" onClick={savePin}>Update PIN</button></div>
-          <div className={`status ${pinStatus.ok ? "ok" : "err"}`}>{pinStatus.msg}</div>
         </div>
 
         <div className="card">
