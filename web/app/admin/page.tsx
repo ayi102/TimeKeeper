@@ -52,7 +52,8 @@ function AdminHome() {
     <>
       <div className="bar">
         <span className="brand">TimeKeeper <span className="byline">by Ali Ismail</span></span>
-        <a href="/admin/insights" className="btn ghost" style={{ marginLeft: "auto" }}>Insights</a>
+        <a href="/admin/scheduler" className="btn ghost" style={{ marginLeft: "auto" }}>Schedule</a>
+        <a href="/admin/insights" className="btn ghost">Insights</a>
         <a href="/admin/meds" className="btn ghost">Reminders</a>
         <a href="/admin/settings" className="btn ghost">Mail</a>
         <SignOutButton />
@@ -80,7 +81,7 @@ function AdminHome() {
                   <td className="num">${e.rate.toFixed(2)}/hr</td>
                   <td>
                     <div className="row-actions">
-                      <a className="btn" href={`/admin/schedule?emp=${e.id}`}>Schedule</a>
+                      <a className="btn" href={`/admin/scheduler?emp=${e.id}`}>Schedule</a>
                       <button className="btn" onClick={() => editEmp(e)}>Edit</button>
                       <button className="btn ghost" onClick={() => toggleActive(e)}>{e.active ? "Deactivate" : "Reactivate"}</button>
                       <button className="btn danger" onClick={() => deleteEmp(e)}>Delete</button>
