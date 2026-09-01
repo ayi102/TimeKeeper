@@ -1,7 +1,5 @@
 {
   "crons": [
-    { "path": "/api/cron/auto-clockout", "schedule": "*/15 * * * *" },
-    { "path": "/api/cron/missed-clockin", "schedule": "*/15 * * * *" },
     { "path": "/api/cron/daily-summary", "schedule": "0 11 * * *" }
   ]
 }

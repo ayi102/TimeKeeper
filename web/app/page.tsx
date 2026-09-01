@@ -112,6 +112,15 @@ export default function Kiosk() {
     return () => clearInterval(t);
   }, [checkMeds]);
 
+  // Maintenance heartbeat: the always-on kiosk drives auto-clockout + missed-
+  // clock-in alerts, so those run without a paid cron. Every 5 minutes.
+  useEffect(() => {
+    const tick = () => { fetch("/api/tick", { method: "POST" }).catch(() => {}); };
+    tick();
+    const t = setInterval(tick, 5 * 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+
   const clockText = now
     ? `${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, "0")} ${now.getHours() >= 12 ? "PM" : "AM"}`
     : "--:--";
