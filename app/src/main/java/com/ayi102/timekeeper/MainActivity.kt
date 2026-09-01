@@ -5,24 +5,19 @@ import android.app.ActivityManager
 import android.os.Bundle
 import android.view.WindowManager
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.work.Constraints
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import fi.iki.elonen.NanoHTTPD
-import java.time.Duration
-import java.time.LocalDateTime
-import java.util.concurrent.TimeUnit
 
+/**
+ * Locked, full-screen kiosk shell around the cloud app. All logic and data now
+ * live in the web app (Vercel + Supabase); the tablet only displays the kiosk
+ * page. Lock-task + boot-launch keep it pinned as a wall kiosk.
+ */
 class MainActivity : AppCompatActivity() {
-    private lateinit var db: Db
-    private lateinit var server: Server
-    private lateinit var prayer: PrayerScheduler
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -30,37 +25,18 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        db = Db(this)
-        server = Server(this, db)
-        server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
+        // The old on-device server/background jobs are retired; cancel any work
+        // still scheduled by a previous version so it can't run against stale
+        // local data (e.g. send wrong emails).
+        WorkManager.getInstance(this).cancelAllWork()
 
         val web = findViewById<WebView>(R.id.webview)
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
         // Let the medication-reminder chime auto-play without a user tap.
         web.settings.mediaPlaybackRequiresUserGesture = false
-        web.loadUrl("http://127.0.0.1:8080/")
-
-        scheduleDailyBackup()
-        scheduleMaintenance()
-
-        prayer = PrayerScheduler(this)
-        prayer.start()
-    }
-
-    /** Periodic upkeep: auto-clockout of forgotten entries and missed-clock-in alerts. */
-    private fun scheduleMaintenance() {
-        val wm = WorkManager.getInstance(this)
-        wm.enqueueUniquePeriodicWork(
-            "auto-clockout", ExistingPeriodicWorkPolicy.UPDATE,
-            PeriodicWorkRequestBuilder<AutoClockoutWorker>(15, TimeUnit.MINUTES).build()
-        )
-        wm.enqueueUniquePeriodicWork(
-            "missed-clockin", ExistingPeriodicWorkPolicy.UPDATE,
-            PeriodicWorkRequestBuilder<MissedClockinWorker>(15, TimeUnit.MINUTES)
-                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                .build()
-        )
+        web.webViewClient = WebViewClient() // keep navigation inside the kiosk
+        web.loadUrl(KIOSK_URL)
     }
 
     override fun onResume() {
@@ -85,28 +61,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Email the summary + DB backup every day at ~6 AM. */
-    private fun scheduleDailyBackup() {
-        val now = LocalDateTime.now()
-        var next = now.toLocalDate().atTime(6, 0)
-        if (!next.isAfter(now)) next = next.plusDays(1)
-        val delayMinutes = Duration.between(now, next).toMinutes()
-
-        val request = PeriodicWorkRequestBuilder<BackupWorker>(24, TimeUnit.HOURS)
-            .setInitialDelay(delayMinutes, TimeUnit.MINUTES)
-            .setConstraints(
-                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-            )
-            .build()
-
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "daily-backup", ExistingPeriodicWorkPolicy.UPDATE, request
-        )
-    }
-
-    override fun onDestroy() {
-        if (::prayer.isInitialized) prayer.stop()
-        if (::server.isInitialized) server.stop()
-        super.onDestroy()
+    private companion object {
+        const val KIOSK_URL = "https://timekeeper-aismail102.vercel.app/"
     }
 }

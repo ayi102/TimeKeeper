@@ -14,8 +14,8 @@ export default function Kiosk() {
 
   const resultTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const medTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const medAudio = useRef<HTMLAudioElement | null>(null);
-  const beep = useRef<{ ctx: AudioContext; iv: ReturnType<typeof setInterval> } | null>(null);
+  const chimeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioCtx = useRef<AudioContext | null>(null);
 
   // ----- clock display -----
   useEffect(() => {
@@ -35,8 +35,46 @@ export default function Kiosk() {
   }, []);
   useEffect(() => { loadWorkers(); }, [loadWorkers]);
 
-  function playClip(src: string) {
-    try { new Audio(src).play().catch(() => {}); } catch { /* ignore */ }
+  // ----- sound: soft synthesized tones, no audio files -----
+  function getCtx(): AudioContext | null {
+    try {
+      if (!audioCtx.current) {
+        const C = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (!C) return null;
+        audioCtx.current = new C();
+      }
+      if (audioCtx.current.state === "suspended") audioCtx.current.resume();
+      return audioCtx.current;
+    } catch {
+      return null;
+    }
+  }
+  function note(freq: number, startAt: number, dur: number, peak = 0.22) {
+    const c = getCtx();
+    if (!c) return;
+    const o = c.createOscillator();
+    const g = c.createGain();
+    o.type = "sine";
+    o.frequency.value = freq;
+    const t0 = c.currentTime + startAt;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g);
+    g.connect(c.destination);
+    o.start(t0);
+    o.stop(t0 + dur + 0.03);
+  }
+  // Short two-note confirmation: rising for clock-in, falling for clock-out.
+  function clockTone(clockedIn: boolean) {
+    note(659.25, 0, 0.14);
+    note(clockedIn ? 987.77 : 493.88, 0.11, 0.18);
+  }
+  // Gentle three-note chime for reminders — noticeable but not harsh.
+  function reminderChime() {
+    note(523.25, 0, 0.28, 0.25);
+    note(659.25, 0.16, 0.28, 0.25);
+    note(783.99, 0.32, 0.5, 0.25);
   }
 
   async function clock(id: number) {
@@ -47,51 +85,21 @@ export default function Kiosk() {
     } catch {
       res = { ok: false, message: "Could not reach the server." };
     }
-    if (res.ok && res.action === "in") playClip("/media/clocked_in.ogg");
-    else if (res.ok && res.action === "out") playClip("/media/clocked_out.ogg");
+    if (res.ok) clockTone(res.action === "in");
     setResult(res);
     if (resultTimer.current) clearTimeout(resultTimer.current);
     resultTimer.current = setTimeout(() => { setResult(null); loadWorkers(); }, 2500);
   }
 
   // ----- medication reminders -----
-  const stopMedSound = useCallback(() => {
-    if (medAudio.current) { try { medAudio.current.pause(); medAudio.current.currentTime = 0; } catch { /* */ } }
-    if (beep.current) { clearInterval(beep.current.iv); try { beep.current.ctx.close(); } catch { /* */ } beep.current = null; }
+  const stopChime = useCallback(() => {
+    if (chimeTimer.current) { clearInterval(chimeTimer.current); chimeTimer.current = null; }
   }, []);
-
-  const startMedSound = useCallback(() => {
-    const el = medAudio.current;
-    if (el) {
-      el.loop = true;
-      el.play().catch(() => startBeep());
-    } else startBeep();
-    function startBeep() {
-      try {
-        const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        if (!Ctx) return;
-        const ctx = new Ctx();
-        ctx.resume?.();
-        const ping = () => {
-          const o = ctx.createOscillator(), g = ctx.createGain();
-          o.type = "sine"; o.frequency.value = 880;
-          g.gain.setValueAtTime(0.0001, ctx.currentTime);
-          g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.05);
-          g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
-          o.connect(g); g.connect(ctx.destination);
-          o.start(); o.stop(ctx.currentTime + 0.55);
-        };
-        ping();
-        beep.current = { ctx, iv: setInterval(ping, 1500) };
-      } catch { /* ignore */ }
-    }
-  }, []);
-
   const dismissMeds = useCallback(() => {
     setDueMeds([]);
-    stopMedSound();
+    stopChime();
     if (medTimer.current) { clearTimeout(medTimer.current); medTimer.current = null; }
-  }, [stopMedSound]);
+  }, [stopChime]);
 
   const checkMeds = useCallback(async () => {
     try {
@@ -99,12 +107,17 @@ export default function Kiosk() {
       const meds: DueMed[] = await r.json();
       if (meds && meds.length) {
         setDueMeds((prev) => [...prev, ...meds]);
-        startMedSound();
+        reminderChime();
+        if (chimeTimer.current) clearInterval(chimeTimer.current);
+        chimeTimer.current = setInterval(reminderChime, 3500); // repeat until acknowledged
         if (medTimer.current) clearTimeout(medTimer.current);
         medTimer.current = setTimeout(() => dismissMeds(), 60000);
       }
-    } catch { /* ignore */ }
-  }, [startMedSound, dismissMeds]);
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dismissMeds]);
 
   useEffect(() => {
     checkMeds();
@@ -129,7 +142,7 @@ export default function Kiosk() {
   return (
     <div className="kiosk">
       <div className="topbar">
-        <img className="avatar" src="/media/ali_photo.jpg" alt="Ali Ismail" onClick={() => playClip("/media/ali_ismail.ogg")} />
+        <img className="avatar" src="/media/ali_photo.jpg" alt="" />
         <span className="kbrand">TimeKeeper <span className="byline">by Ali Ismail</span></span>
         <div className="topright" style={{ marginLeft: "auto" }}>
           <div className="clock">{clockText}</div>
@@ -175,9 +188,6 @@ export default function Kiosk() {
           </div>
         </div>
       )}
-
-      {/* med reminder sound (loops while the overlay is up; falls back to a chime if absent) */}
-      <audio ref={medAudio} preload="auto" src="/media/med_alert.m4a" />
     </div>
   );
 }
