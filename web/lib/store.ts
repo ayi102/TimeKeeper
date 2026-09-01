@@ -205,6 +205,24 @@ export async function replaceSchedules(id: number, shifts: SchedRow[]): Promise<
   });
 }
 
+// ---------- insights ----------
+
+export interface RawEntry {
+  employeeId: number; clockIn: string; clockOut: string | null; actualIn: string | null; actualOut: string | null;
+}
+export async function allTimeEntries(): Promise<RawEntry[]> {
+  const rows = await sql()`select employee_id, clock_in, clock_out, actual_in, actual_out from time_entries`;
+  return rows.map((r) => ({
+    employeeId: Number(r.employee_id), clockIn: r.clock_in, clockOut: r.clock_out, actualIn: r.actual_in, actualOut: r.actual_out,
+  }));
+}
+
+export interface SchedAll { employeeId: number; weekday: number; start: string; end: string; }
+export async function allSchedules(): Promise<SchedAll[]> {
+  const rows = await sql()`select employee_id, weekday, start_time, end_time from schedules`;
+  return rows.map((r) => ({ employeeId: Number(r.employee_id), weekday: r.weekday, start: r.start_time, end: r.end_time }));
+}
+
 // ---------- missed-clock-in support ----------
 
 export async function activeWorkers(): Promise<{ id: number; name: string }[]> {
