@@ -9,6 +9,7 @@ function Settings() {
   const [saveStatus, setSaveStatus] = useState<{ msg: string; ok: boolean }>({ msg: "", ok: true });
   const [pin, setPin] = useState({ current: "", next: "", confirm: "" });
   const [pinStatus, setPinStatus] = useState<{ msg: string; ok: boolean }>({ msg: "", ok: true });
+  const [testStatus, setTestStatus] = useState<{ msg: string; ok: boolean }>({ msg: "", ok: true });
 
   useEffect(() => {
     (async () => {
@@ -41,6 +42,16 @@ function Settings() {
       if (res.ok) setPin({ current: "", next: "", confirm: "" });
     } catch {
       setPinStatus({ msg: "Could not update.", ok: false });
+    }
+  }
+
+  async function sendTest() {
+    setTestStatus({ msg: "Sending…", ok: true });
+    try {
+      const res = await (await fetch("/api/admin/backup-test", { method: "POST" })).json();
+      setTestStatus({ msg: res.message || (res.ok ? "Sent." : "Failed."), ok: res.ok });
+    } catch {
+      setTestStatus({ msg: "Failed to send.", ok: false });
     }
   }
 
@@ -77,7 +88,9 @@ function Settings() {
 
         <div className="card">
           <h2>Daily summary email</h2>
-          <p className="hint" style={{ marginTop: 0 }}>Once mail is set up, a summary emails automatically each morning (via a scheduled job — wired up in the deploy step). A one-click test send will live here too.</p>
+          <p className="hint" style={{ marginTop: 0 }}>A summary emails automatically each morning once deployed. Use this to send one now and confirm your mail settings work.</p>
+          <div style={{ marginTop: ".5rem" }}><button className="btn" onClick={sendTest}>Send summary email now</button></div>
+          <div className={`status ${testStatus.ok ? "ok" : "err"}`}>{testStatus.msg}</div>
         </div>
       </main>
     </>

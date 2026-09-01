@@ -13,7 +13,8 @@ export async function middleware(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const path = request.nextUrl.pathname;
-  const isPublic = path.startsWith("/login") || path.startsWith("/auth");
+  // Cron endpoints authorize via CRON_SECRET in the route, not a session.
+  const isPublic = path.startsWith("/login") || path.startsWith("/auth") || path.startsWith("/api/cron");
 
   if (!url || !key) {
     if (process.env.NODE_ENV !== "production") return NextResponse.next();

@@ -33,3 +33,9 @@ export async function isAdminRequest(): Promise<boolean> {
   const c = await cookies();
   return isAdmin(c.get("tk_admin")?.value);
 }
+
+/** Cron endpoints are authorized by a shared secret (Vercel Cron sends it as a Bearer token). */
+export function cronAuthorized(req: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET;
+  return Boolean(secret) && req.headers.get("authorization") === `Bearer ${secret}`;
+}

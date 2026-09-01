@@ -122,8 +122,7 @@ export default function Kiosk() {
       <div className="topbar">
         <img className="avatar" src="/media/ali_photo.jpg" alt="Ali Ismail" onClick={() => playClip("/media/ali_ismail.ogg")} />
         <span className="kbrand">TimeKeeper <span className="byline">by Ali Ismail</span></span>
-        <a className="adminbtn" href="/admin">Admin</a>
-        <div className="topright">
+        <div className="topright" style={{ marginLeft: "auto" }}>
           <div className="clock">{clockText}</div>
           <div className="date">{dateText}</div>
         </div>
