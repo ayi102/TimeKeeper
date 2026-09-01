@@ -42,7 +42,8 @@ tr.inactive { opacity:.5; }
 .owed { color:#fbbf24; }
 .form { display:flex; gap:.75rem; align-items:flex-end; flex-wrap:wrap; margin-bottom:1rem; }
 .form label, label.field { display:flex; flex-direction:column; gap:.3rem; font-size:.8rem; color:var(--muted); }
-input, select { background:var(--bg); border:1px solid var(--panel-2); color:var(--text); padding:.6rem .7rem; border-radius:8px; font-size:1rem; }
+input, select, textarea { background:var(--bg); border:1px solid var(--panel-2); color:var(--text); padding:.6rem .7rem; border-radius:8px; font-size:1rem; font-family:inherit; }
+textarea { min-height:3.2rem; resize:vertical; width:100%; }
 .row-actions { display:flex; gap:.4rem; justify-content:flex-end; flex-wrap:wrap; }
 .status { font-size:.9rem; min-height:1.2em; margin-top:.25rem; }
 .status.err { color:#fca5a5; } .status.ok { color:#86efac; }

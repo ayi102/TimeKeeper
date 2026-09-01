@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Worker { id: number; name: string; in: boolean; }
 interface ClockResult { ok: boolean; name?: string; action?: string; time?: string; message?: string; }
-interface DueMed { name: string; dose: string; }
+interface DueMed { name: string; notes: string; }
 
 export default function Kiosk() {
   const [workers, setWorkers] = useState<Worker[]>([]);
@@ -177,11 +177,11 @@ export default function Kiosk() {
       {dueMeds.length > 0 && (
         <div className="overlay med">
           <div className="sheet med">
-            <div className="mark">💊</div>
-            <div className="msg">Medication reminder</div>
+            <div className="mark">🔔</div>
+            <div className="msg">Reminder</div>
             <ul className="medlist">
               {dueMeds.map((m, i) => (
-                <li key={i}>{m.name}{m.dose ? <span className="dose">{m.dose}</span> : null}</li>
+                <li key={i}>{m.name}{m.notes ? <span className="dose">{m.notes}</span> : null}</li>
               ))}
             </ul>
             <button className="medok" onClick={dismissMeds}>OK</button>

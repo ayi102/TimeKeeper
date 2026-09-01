@@ -244,8 +244,8 @@ export async function periodSeconds(startISO: string, endISO: string, now: DateT
 // ---------- medications ----------
 
 export interface MedSlotRow { weekday: number; time: string; }
-export interface Med { id: number; name: string; dose: string; active: boolean; slots: MedSlotRow[]; }
-export interface DueMed { name: string; dose: string; }
+export interface Med { id: number; name: string; notes: string; active: boolean; slots: MedSlotRow[]; }
+export interface DueMed { name: string; notes: string; }
 
 export async function meds(): Promise<Med[]> {
   const slotRows = await sql()`select medication_id, weekday, time_of_day from med_times order by weekday, time_of_day`;
@@ -255,18 +255,18 @@ export async function meds(): Promise<Med[]> {
     if (!byMed.has(id)) byMed.set(id, []);
     byMed.get(id)!.push({ weekday: r.weekday, time: r.time_of_day });
   }
-  const rows = await sql()`select id, name, dose, active from medications order by active desc, lower(name)`;
-  return rows.map((r) => ({ id: Number(r.id), name: r.name, dose: r.dose, active: r.active, slots: byMed.get(Number(r.id)) ?? [] }));
+  const rows = await sql()`select id, name, notes, active from medications order by active desc, lower(name)`;
+  return rows.map((r) => ({ id: Number(r.id), name: r.name, notes: r.notes, active: r.active, slots: byMed.get(Number(r.id)) ?? [] }));
 }
 
-export async function saveMed(id: number | null, name: string, dose: string, slots: MedSlotRow[]): Promise<number> {
+export async function saveMed(id: number | null, name: string, notes: string, slots: MedSlotRow[]): Promise<number> {
   return await sql().begin(async (tx) => {
     let medId: number;
     if (id != null) {
-      await tx`update medications set name = ${name}, dose = ${dose} where id = ${id}`;
+      await tx`update medications set name = ${name}, notes = ${notes} where id = ${id}`;
       medId = id;
     } else {
-      const [row] = await tx`insert into medications (name, dose) values (${name}, ${dose}) returning id`;
+      const [row] = await tx`insert into medications (name, notes) values (${name}, ${notes}) returning id`;
       medId = Number(row.id);
     }
     await tx`delete from med_times where medication_id = ${medId}`; // cascade clears med_fired
@@ -290,7 +290,7 @@ export async function medsDue(now: DateTime): Promise<DueMed[]> {
   const today = now.toFormat("yyyy-MM-dd");
   const wd = now.weekday - 1;
   const cands = await sql()`
-    select mt.id, m.name, m.dose, mt.time_of_day
+    select mt.id, m.name, m.notes, mt.time_of_day
     from med_times mt join medications m on m.id = mt.medication_id
     where m.active = true and mt.weekday = ${wd}`;
   const due: DueMed[] = [];
@@ -303,7 +303,7 @@ export async function medsDue(now: DateTime): Promise<DueMed[]> {
       const rows = await sql()`
         insert into med_fired (med_time_id, fired_date) values (${Number(c.id)}, ${today})
         on conflict do nothing returning med_time_id`;
-      if (rows.length) due.push({ name: c.name, dose: c.dose });
+      if (rows.length) due.push({ name: c.name, notes: c.notes });
     }
   }
   return due;

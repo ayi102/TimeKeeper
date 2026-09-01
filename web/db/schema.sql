@@ -50,10 +50,12 @@ create table if not exists clockin_alerts (
   unique (employee_id, shift_date)
 );
 
+-- "medications" is the reminders table (kept name for continuity); `notes` holds
+-- free text like a medication dosage or a task detail ("check the side door").
 create table if not exists medications (
   id     bigint generated always as identity primary key,
   name   text    not null,
-  dose   text    not null default '',
+  notes  text    not null default '',
   active boolean not null default true
 );
 

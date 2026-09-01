@@ -52,7 +52,7 @@ function AdminHome() {
     <>
       <div className="bar">
         <span className="brand">TimeKeeper <span className="byline">by Ali Ismail</span></span>
-        <a href="/admin/meds" className="btn ghost" style={{ marginLeft: "auto" }}>Medications</a>
+        <a href="/admin/meds" className="btn ghost" style={{ marginLeft: "auto" }}>Reminders</a>
         <a href="/admin/settings" className="btn ghost">Mail</a>
         <SignOutButton />
       </div>
