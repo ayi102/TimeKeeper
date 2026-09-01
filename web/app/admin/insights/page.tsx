@@ -15,6 +15,7 @@ interface Worker {
 interface Data {
   thisMonth: string; lastMonth: string; months: string[]; behaviorDays: number;
   workers: Worker[];
+  monthlyCost: { month: string; cost: number; hours: number }[];
   totals: { thisMonthPay: number; thisMonthHours: number; lastMonthPay: number; allTimePay: number; owed: number };
 }
 
@@ -78,9 +79,9 @@ function Insights() {
               </div>
             </div>
 
-            {/* ---- Pay: monthly trend ---- */}
+            {/* ---- Pay: monthly cost, last 3 months ---- */}
             <div className="card">
-              <h2>Monthly pay</h2>
+              <h2>Monthly cost <span className="muted" style={{ fontSize: ".8rem", fontWeight: 400 }}>· last {d.months.length} months</span></h2>
               <div style={scroll}>
                 <table>
                   <thead>
@@ -94,6 +95,16 @@ function Insights() {
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr>
+                      <td>Total cost</td>
+                      {d.monthlyCost.map((c) => <td key={c.month} className="num">{money(c.cost)}</td>)}
+                    </tr>
+                    <tr>
+                      <td className="muted">Hours</td>
+                      {d.monthlyCost.map((c) => <td key={c.month} className="num muted">{c.hours.toFixed(1)}</td>)}
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             </div>
@@ -154,8 +165,14 @@ function Insights() {
                 <strong>Late</strong>: clocked in more than 5 min after the shift start.
                 <strong> Early in</strong>: tapped in before the start.
                 <strong> Overtime</strong>: tapped out after the shift end.
-                <strong> Missed</strong>: scheduled but never clocked in.
-                <strong> Forgot out</strong>: never tapped out (auto-closed).
+                <strong> Missed</strong>: a scheduled day with no clock-in at all.
+                <strong> Forgot out</strong>: tapped in but never tapped out.
+              </p>
+              <p className="hint" style={{ marginTop: ".4rem" }}>
+                Late / early / overtime are only counted when a tap falls on a real scheduled shift, so off-schedule
+                clock-ins aren&apos;t misjudged. <strong>Missed</strong> depends on each worker&apos;s schedule being
+                accurate — if it shows high, check their <a href="/admin" style={{ color: "var(--indigo)" }}>Schedule</a> for
+                extra or wrong shifts.
               </p>
             </div>
           </>
