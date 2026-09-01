@@ -10,7 +10,7 @@ interface Worker {
   lastMonth: { hours: number; pay: number };
   allTime: { hours: number; pay: number; paid: number; owed: number };
   months: MonthPay[];
-  behavior: { shifts: number; late: number; tooEarly: number; overtime: number; forgotOut: number; missed: number };
+  behavior: { shifts: number; late: number; tooEarly: number; overtimeHours: number; underHours: number; forgotOut: number; missed: number };
 }
 interface Data {
   thisMonth: string; lastMonth: string; months: string[]; behaviorDays: number;
@@ -138,7 +138,7 @@ function Insights() {
                   <thead>
                     <tr>
                       <th>Worker</th><th className="num">Shifts</th><th className="num">Late</th>
-                      <th className="num">Early in</th><th className="num">Overtime</th>
+                      <th className="num">Early in</th><th className="num">Overtime</th><th className="num">Undertime</th>
                       <th className="num">Missed</th><th className="num">Forgot out</th>
                     </tr>
                   </thead>
@@ -146,13 +146,15 @@ function Insights() {
                     {d.workers.map((w) => {
                       const b = w.behavior;
                       const flag = (n: number) => (n > 0 ? { color: "#fbbf24", fontWeight: 700 } : undefined);
+                      const hrs = (h: number) => (h > 0 ? `${h.toFixed(1)}h` : "—");
                       return (
                         <tr key={w.id} className={w.active ? "" : "inactive"}>
                           <td>{w.name}</td>
                           <td className="num">{b.shifts}</td>
                           <td className="num" style={flag(b.late)}>{b.late}</td>
                           <td className="num">{b.tooEarly}</td>
-                          <td className="num">{b.overtime}</td>
+                          <td className="num">{hrs(b.overtimeHours)}</td>
+                          <td className="num">{hrs(b.underHours)}</td>
                           <td className="num" style={flag(b.missed)}>{b.missed}</td>
                           <td className="num" style={flag(b.forgotOut)}>{b.forgotOut}</td>
                         </tr>
@@ -164,7 +166,8 @@ function Insights() {
               <p className="hint" style={{ marginTop: ".75rem" }}>
                 <strong>Late</strong>: clocked in more than 5 min after the shift start.
                 <strong> Early in</strong>: tapped in before the start.
-                <strong> Overtime</strong>: tapped out after the shift end.
+                <strong> Overtime</strong>: total time worked past the shift end (recorded from taps; pay is capped at the scheduled end, so this is unpaid).
+                <strong> Undertime</strong>: total scheduled time not worked (came in late and/or left early).
                 <strong> Missed</strong>: a scheduled day with no clock-in at all.
                 <strong> Forgot out</strong>: tapped in but never tapped out.
               </p>

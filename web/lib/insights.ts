@@ -18,7 +18,6 @@ import * as store from "./store";
 const GRACE = Number(process.env.TIMEKEEPER_EARLY_GRACE_MIN ?? 15);
 const LATE_MIN = 5;
 const EARLY_MIN = 3;
-const OT_MIN = 5;
 const BEHAVIOR_DAYS = 90;
 const MONTHS_BACK = 3;
 
@@ -29,7 +28,7 @@ export interface WorkerInsight {
   lastMonth: { hours: number; pay: number };
   allTime: { hours: number; pay: number; paid: number; owed: number };
   months: MonthPay[];
-  behavior: { shifts: number; late: number; tooEarly: number; overtime: number; forgotOut: number; missed: number };
+  behavior: { shifts: number; late: number; tooEarly: number; overtimeHours: number; underHours: number; forgotOut: number; missed: number };
 }
 
 /** The shift window that actually contains `t` (within the early grace), or null. */
@@ -63,10 +62,12 @@ export async function computeInsights(now: DateTime = Times.now()) {
   const win = now.minus({ days: BEHAVIOR_DAYS });
 
   const secByEmpMonth = new Map<string, number>();
-  const beh = new Map<number, WorkerInsight["behavior"]>();
+  const beh = new Map<number, { shifts: number; late: number; tooEarly: number; forgotOut: number; missed: number }>();
+  const otSecs = new Map<number, number>();
+  const underSecs = new Map<number, number>();
   const cinByEmpDate = new Map<string, DateTime[]>();
   const firstCinByEmp = new Map<number, DateTime>(); // when each worker's tracking began
-  for (const e of emps) beh.set(e.id, { shifts: 0, late: 0, tooEarly: 0, overtime: 0, forgotOut: 0, missed: 0 });
+  for (const e of emps) { beh.set(e.id, { shifts: 0, late: 0, tooEarly: 0, forgotOut: 0, missed: 0 }); otSecs.set(e.id, 0); underSecs.set(e.id, 0); }
 
   for (const en of entries) {
     const cin = Times.parse(en.clockIn);
@@ -90,9 +91,18 @@ export async function computeInsights(now: DateTime = Times.now()) {
       const ai = Times.parse(en.actualIn);
       const w = containingShift(schedByEmpWd.get(`${en.employeeId}:${weekday(ai)}`) ?? [], ai);
       if (w) {
-        if (ai.toMillis() > w[0].plus({ minutes: LATE_MIN }).toMillis()) b.late++;
-        if (ai.toMillis() < w[0].minus({ minutes: EARLY_MIN }).toMillis()) b.tooEarly++;
-        if (en.actualOut && Times.parse(en.actualOut).toMillis() > w[1].plus({ minutes: OT_MIN }).toMillis()) b.overtime++;
+        const [start, end] = w;
+        if (ai.toMillis() > start.plus({ minutes: LATE_MIN }).toMillis()) b.late++;
+        if (ai.toMillis() < start.minus({ minutes: EARLY_MIN }).toMillis()) b.tooEarly++;
+        if (en.actualOut) {
+          const ao = Times.parse(en.actualOut);
+          // Overtime = time worked past the scheduled end.
+          otSecs.set(en.employeeId, (otSecs.get(en.employeeId) ?? 0) + Math.max(0, ao.diff(end, "seconds").seconds));
+          // Undertime = scheduled time not worked (came in late + left early).
+          underSecs.set(en.employeeId, (underSecs.get(en.employeeId) ?? 0)
+            + Math.max(0, ai.diff(start, "seconds").seconds)
+            + Math.max(0, end.diff(ao, "seconds").seconds));
+        }
       }
       // Tapped in but never tapped out = genuinely forgot to clock out.
       if (!en.actualOut) b.forgotOut++;
@@ -138,7 +148,11 @@ export async function computeInsights(now: DateTime = Times.now()) {
       lastMonth: monthPay(lastMonth),
       allTime: { hours: run?.hours ?? 0, pay: run?.pay ?? 0, paid: run?.paid ?? 0, owed: run?.owedDue ?? 0 },
       months: monthLabels.map((m) => ({ month: m, ...monthPay(m) })),
-      behavior: beh.get(e.id)!,
+      behavior: {
+        ...beh.get(e.id)!,
+        overtimeHours: Money.hours(otSecs.get(e.id) ?? 0),
+        underHours: Money.hours(underSecs.get(e.id) ?? 0),
+      },
     };
   });
 
