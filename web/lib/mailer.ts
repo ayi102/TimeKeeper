@@ -19,7 +19,11 @@ export async function mailConfigured(): Promise<boolean> {
   return Boolean(c.user && c.pass && c.to);
 }
 
-export async function sendMail(subject: string, text: string): Promise<string> {
+export async function sendMail(
+  subject: string,
+  text: string,
+  attachments?: { filename: string; content: Buffer }[]
+): Promise<string> {
   const c = await mailConfig();
   if (!c.user || !c.pass || !c.to) throw new Error("Mail isn't set up yet — enter your email settings first.");
   const transport = nodemailer.createTransport({
@@ -28,6 +32,6 @@ export async function sendMail(subject: string, text: string): Promise<string> {
     secure: c.port === 465,
     auth: { user: c.user, pass: c.pass },
   });
-  await transport.sendMail({ from: c.from, to: c.to, subject, text });
+  await transport.sendMail({ from: c.from, to: c.to, subject, text, attachments });
   return `Sent to ${c.to}.`;
 }

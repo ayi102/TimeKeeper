@@ -1,12 +1,12 @@
 import { json, isAdminRequest, unauthorized } from "@/lib/http";
-import { sendDailySummary } from "@/lib/summary-email";
+import { sendBackup } from "@/lib/backup";
 
-// POST /api/admin/backup-test — send the summary email now (admin "test send").
+// POST /api/admin/backup-test — email a database backup now (admin "test send").
 export async function POST() {
   if (!(await isAdminRequest())) return unauthorized();
   try {
-    return json({ ok: true, message: await sendDailySummary() });
+    return json({ ok: true, message: await sendBackup() });
   } catch (e) {
-    return json({ ok: false, message: e instanceof Error ? e.message : "Send failed." });
+    return json({ ok: false, message: e instanceof Error ? e.message : "Backup failed." });
   }
 }

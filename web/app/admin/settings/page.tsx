@@ -56,16 +56,16 @@ function Settings() {
           </div>
           <label className="field" style={{ marginTop: ".9rem" }}>Sending Gmail address<input type="text" placeholder="you@gmail.com" value={mail.user} onChange={(e) => setMail({ ...mail, user: e.target.value })} /></label>
           <label className="field" style={{ marginTop: ".9rem" }}>Gmail App Password<input type="password" placeholder={hasPassword ? "•••••• (saved — leave blank to keep)" : "16-char app password"} value={mail.password} onChange={(e) => setMail({ ...mail, password: e.target.value })} /></label>
-          <label className="field" style={{ marginTop: ".9rem" }}>Send summary to<input type="text" placeholder="where the daily email goes" value={mail.to} onChange={(e) => setMail({ ...mail, to: e.target.value })} /></label>
+          <label className="field" style={{ marginTop: ".9rem" }}>Email backups to<input type="text" placeholder="where the daily backup goes" value={mail.to} onChange={(e) => setMail({ ...mail, to: e.target.value })} /></label>
           <div style={{ marginTop: ".9rem" }}><button className="btn primary" onClick={saveMail}>Save</button></div>
           <p className="hint">Use a Google <strong>App Password</strong> (Google Account → Security → 2-Step Verification → App passwords), not your normal password. Leave the password blank to keep the saved one.</p>
           <div className={`status ${saveStatus.ok ? "ok" : "err"}`}>{saveStatus.msg}</div>
         </div>
 
         <div className="card">
-          <h2>Daily summary email</h2>
-          <p className="hint" style={{ marginTop: 0 }}>A summary emails automatically each morning once deployed. Use this to send one now and confirm your mail settings work.</p>
-          <div style={{ marginTop: ".5rem" }}><button className="btn" onClick={sendTest}>Send summary email now</button></div>
+          <h2>Daily database backup</h2>
+          <p className="hint" style={{ marginTop: 0 }}>A full backup of the database is emailed automatically each morning (a gzipped export you can keep off-site). Use this to send one now and confirm it works.</p>
+          <div style={{ marginTop: ".5rem" }}><button className="btn" onClick={sendTest}>Send backup now</button></div>
           <div className={`status ${testStatus.ok ? "ok" : "err"}`}>{testStatus.msg}</div>
         </div>
       </main>
